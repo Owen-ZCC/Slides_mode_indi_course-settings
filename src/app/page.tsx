@@ -46,6 +46,7 @@ function CoursewareEditor() {
       'image-text': '图文页',
       'diagnosis': '试题诊断',
       'conversation-diagnosis': '对话诊断',
+      'tiered-teaching': '分层教学',
     };
     return titles[template] || '新页面';
   };

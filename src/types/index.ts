@@ -24,7 +24,8 @@ export type PageTemplateType =
   | 'text-image'
   | 'image-text'
   | 'diagnosis'
-  | 'conversation-diagnosis';
+  | 'conversation-diagnosis'
+  | 'tiered-teaching';
 
 // 聊天消息
 export interface ChatMessage {
@@ -55,8 +56,10 @@ export interface CoursePage {
   elements: SlideElement[];
   order: number;
   hidden?: boolean; // 是否隐藏（用于对话诊断开关关闭时保留配置）
+  configGroupId?: string; // 配置组ID，用于关联同一套配置的诊断页面
   diagnosisData?: DiagnosisPageData;
   conversationDiagnosisData?: ConversationDiagnosisPageData;
+  tieredTeachingData?: TieredTeachingPageData; // 分层教学页面数据
 }
 
 // 大纲分组
@@ -170,6 +173,8 @@ export interface DiagnosisPageData {
   questions: DiagnosisQuestion[];
   knowledgePoints: string[];
   config: DiagnosisConfig;
+  configGroupId?: string; // 配置组ID
+  groupIndex?: number; // 在所有配置组中的序号（用于编号）
 }
 
 // 对话诊断配置
@@ -216,6 +221,7 @@ export interface ConversationDiagnosisConfig {
 export interface ConversationDiagnosisPageData {
   config: ConversationDiagnosisConfig;
   linkedDiagnosisPageId: string; // 关联的试题诊断页面ID
+  configGroupId?: string; // 配置组ID
 }
 
 export interface DifferentiatedTeachingState {
@@ -230,4 +236,64 @@ export interface DifferentiatedTeachingState {
     diagnosisConversation: string[];
     tiered: string[];
   };
+}
+
+// 分层教学相关类型
+export interface LearningTask {
+  id: string;
+  title: string;
+  description: string;
+  resources?: string[];
+}
+
+export interface EvaluationCriteria {
+  id: string;
+  name: string;
+  description: string;
+  weight: number;
+}
+
+export interface LearningPerformanceLevel {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  minScore: number;
+  maxScore: number;
+  description: string;
+}
+
+export type GuidanceStyle = 'direct' | 'scaffolding' | 'inquiry';
+export type ConversationStyle = 'formal' | 'friendly' | 'inspiring';
+export type AgentEncouragementStyle = 'minimal' | 'balanced' | 'enthusiastic';
+
+export interface TieredAgentConfig {
+  name: string;
+  role: string;
+  avatar: string;
+  guidanceStyle: GuidanceStyle;
+  conversationStyle: ConversationStyle;
+  encouragementStyle: AgentEncouragementStyle;
+  maxRounds: number;
+  specialFocus?: string;
+  advancedPrompt?: string;
+}
+
+export interface TieredLevelConfig {
+  levelId: string;
+  levelName: string;
+  levelIcon: string;
+  levelColor: string;
+  learningTasks: LearningTask[];
+  evaluationCriteria: EvaluationCriteria[];
+  performanceLevels: LearningPerformanceLevel[];
+  agentConfig: TieredAgentConfig;
+}
+
+export interface TieredTeachingPageData {
+  configGroupId: string;
+  groupIndex: number;
+  lessonKnowledgePoints: KnowledgePoint[]; // 课时知识点
+  studentLevels: StudentLevel[]; // 从认知起点诊断读取的分层（只读）
+  tieredConfigs: TieredLevelConfig[]; // 每个分层的配置
 }

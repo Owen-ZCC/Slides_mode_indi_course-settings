@@ -92,19 +92,114 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
   }
 }
 
-// 验证页面顺序：对话诊断必须在试题诊断之后（只验证非隐藏页面）
+// 验证页面顺序：对话诊断必须在试题诊断之后，分层教学必须在诊断之后（只验证非隐藏页面）
 function validatePageOrder(pages: CoursePage[]): { valid: boolean; message?: string } {
   const visiblePages = pages.filter(p => !p.hidden);
-  const diagnosisIndex = visiblePages.findIndex(p => p.type === 'diagnosis');
-  const conversationIndex = visiblePages.findIndex(p => p.type === 'conversation-diagnosis');
 
-  // 如果两种页面都存在，检查顺序
-  if (diagnosisIndex !== -1 && conversationIndex !== -1) {
-    if (conversationIndex < diagnosisIndex) {
-      return {
-        valid: false,
-        message: '学生须完成"试题诊断"才能进入"对话诊断"'
-      };
+  // 按配置组分组
+  const configGroups = new Map<string, CoursePage[]>();
+  visiblePages.forEach(page => {
+    const groupId = page.configGroupId ||
+                    page.diagnosisData?.configGroupId ||
+                    page.conversationDiagnosisData?.configGroupId ||
+                    page.tieredTeachingData?.configGroupId;
+    if (groupId) {
+      if (!configGroups.has(groupId)) {
+        configGroups.set(groupId, []);
+      }
+      configGroups.get(groupId)!.push(page);
+    }
+  });
+
+  // 验证每个配置组内的顺序
+  for (const [, groupPages] of configGroups) {
+    const diagnosisPage = groupPages.find(p => p.type === 'diagnosis');
+    const conversationPage = groupPages.find(p => p.type === 'conversation-diagnosis');
+    const tieredPage = groupPages.find(p => p.type === 'tiered-teaching');
+
+    if (diagnosisPage && conversationPage) {
+      const diagnosisIndex = visiblePages.indexOf(diagnosisPage);
+      const conversationIndex = visiblePages.indexOf(conversationPage);
+
+      // 对话诊断必须在试题诊断之后
+      if (conversationIndex < diagnosisIndex) {
+        return {
+          valid: false,
+          message: '学生须完成"试题诊断"才能进入"对话诊断"'
+        };
+      }
+
+      // 对话诊断必须紧跟试题诊断（中间不能有其他配置组的页面）
+      if (conversationIndex !== diagnosisIndex + 1) {
+        return {
+          valid: false,
+          message: '对话诊断页面必须紧跟在对应的试题诊断页面之后'
+        };
+      }
+    }
+
+    // 验证分层教学页面的顺序
+    if (tieredPage && diagnosisPage) {
+      const diagnosisIndex = visiblePages.indexOf(diagnosisPage);
+      const tieredIndex = visiblePages.indexOf(tieredPage);
+
+      // 分层教学必须在试题诊断之后
+      if (tieredIndex < diagnosisIndex) {
+        return {
+          valid: false,
+          message: '学生须完成"认知起点诊断"才能进入"分层教学"'
+        };
+      }
+
+      // 如果有对话诊断，分层教学必须在对话诊断之后
+      if (conversationPage) {
+        const conversationIndex = visiblePages.indexOf(conversationPage);
+        if (tieredIndex < conversationIndex) {
+          return {
+            valid: false,
+            message: '学生须完成"对话诊断"才能进入"分层教学"'
+          };
+        }
+
+        // 分层教学必须紧跟对话诊断（中间不能有其他配置组的页面）
+        if (tieredIndex !== conversationIndex + 1) {
+          return {
+            valid: false,
+            message: '分层教学页面必须紧跟在对应的对话诊断页面之后'
+          };
+        }
+      } else {
+        // 如果没有对话诊断，分层教学必须紧跟试题诊断
+        if (tieredIndex !== diagnosisIndex + 1) {
+          return {
+            valid: false,
+            message: '分层教学页面必须紧跟在对应的试题诊断页面之后'
+          };
+        }
+      }
+    }
+
+    // 验证不同配置组的页面不能穿插
+    if (groupPages.length > 1) {
+      const groupIndices = groupPages.map(p => visiblePages.indexOf(p));
+      const minIndex = Math.min(...groupIndices);
+      const maxIndex = Math.max(...groupIndices);
+
+      // 检查这个范围内是否有其他配置组的页面
+      for (let i = minIndex + 1; i < maxIndex; i++) {
+        const pageAtIndex = visiblePages[i];
+        const pageGroupId = pageAtIndex.configGroupId ||
+                           pageAtIndex.diagnosisData?.configGroupId ||
+                           pageAtIndex.conversationDiagnosisData?.configGroupId ||
+                           pageAtIndex.tieredTeachingData?.configGroupId;
+
+        if (pageGroupId && !groupPages.includes(pageAtIndex)) {
+          return {
+            valid: false,
+            message: '不同的"因材施教"设置不能穿插'
+          };
+        }
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { KnowledgePoint, StudentLevel, DiagnosisQuestion, CoursePage, DiagnosisConfig, ConversationDiagnosisConfig } from '@/types';
+import { KnowledgePoint, StudentLevel, DiagnosisQuestion, CoursePage, DiagnosisConfig, ConversationDiagnosisConfig, TieredTeachingPageData, TieredLevelConfig, LearningTask, EvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig } from '@/types';
 import { useEditor } from '@/store/EditorContext';
 import { ChevronLeftIcon } from '@/components/icons';
 
@@ -41,6 +41,41 @@ export default function DifferentiatedPanel() {
 
   // 对话诊断开关
   const [conversationEnabled, setConversationEnabled] = useState(false);
+
+  // 分层教学相关状态
+  const [tieredKnowledgePoints, setTieredKnowledgePoints] = useState<KnowledgePoint[]>([
+    { id: '1', name: '力的概念' },
+    { id: '2', name: '力的作用效果' },
+    { id: '3', name: '力的三要素' },
+  ]);
+  const [boundTieredPageId, setBoundTieredPageId] = useState<string | null>(null);
+
+  // 生成新的配置组ID
+  const generateConfigGroupId = () => `config-group-${Date.now()}`;
+
+  // 获取当前配置组的试题诊断页面
+  const getCurrentDiagnosisPage = () => {
+    if (!boundPageId) return null;
+    return courseData.pages.find(p => p.id === boundPageId && p.type === 'diagnosis');
+  };
+
+  // 获取当前配置组的对话诊断页面
+  const getCurrentConversationPage = () => {
+    const diagnosisPage = getCurrentDiagnosisPage();
+    if (!diagnosisPage?.diagnosisData?.configGroupId) return null;
+    const configGroupId = diagnosisPage.diagnosisData.configGroupId;
+    return courseData.pages.find(
+      p => p.type === 'conversation-diagnosis' &&
+      p.conversationDiagnosisData?.configGroupId === configGroupId
+    );
+  };
+
+  // 计算配置组序号
+  const getNextGroupIndex = () => {
+    const diagnosisPages = courseData.pages.filter(p => p.type === 'diagnosis');
+    const maxIndex = Math.max(0, ...diagnosisPages.map(p => p.diagnosisData?.groupIndex || 0));
+    return maxIndex + 1;
+  };
 
   // 默认对话诊断提示词
   const defaultConversationPrompt = `# 角色设定
@@ -84,15 +119,26 @@ export default function DifferentiatedPanel() {
 
     if (enabled) {
       // 检查是否已有试题诊断页面
-      const diagnosisPage = courseData.pages.find(p => p.type === 'diagnosis');
+      const diagnosisPage = getCurrentDiagnosisPage();
       if (!diagnosisPage) {
         alert('请先生成试题诊断页面');
         setConversationEnabled(false);
         return;
       }
 
-      // 检查是否已存在对话诊断页面（包括隐藏的）
-      const existingConvPage = courseData.pages.find(p => p.type === 'conversation-diagnosis');
+      const configGroupId = diagnosisPage.diagnosisData?.configGroupId;
+      if (!configGroupId) {
+        alert('配置数据异常，请重新生成试题诊断页面');
+        setConversationEnabled(false);
+        return;
+      }
+
+      // 检查是否已存在该配置组的对话诊断页面（包括隐藏的）
+      const existingConvPage = courseData.pages.find(
+        p => p.type === 'conversation-diagnosis' &&
+        p.conversationDiagnosisData?.configGroupId === configGroupId
+      );
+
       if (existingConvPage) {
         // 已存在，显示该页面（取消隐藏）
         if (existingConvPage.hidden) {
@@ -118,16 +164,19 @@ export default function DifferentiatedPanel() {
         isAdvancedMode: false,
       };
 
+      const groupIndex = diagnosisPage.diagnosisData?.groupIndex || 1;
       const newPage: CoursePage = {
         id: `conversation-diagnosis-${Date.now()}`,
-        title: '因材施教-对话诊断',
+        title: `因材施教-对话诊断${groupIndex}`,
         type: 'conversation-diagnosis',
         elements: [],
         order: diagnosisPage.order + 1,
         hidden: false,
+        configGroupId,
         conversationDiagnosisData: {
           config: defaultConfig,
           linkedDiagnosisPageId: diagnosisPage.id,
+          configGroupId,
         }
       };
 
@@ -138,7 +187,7 @@ export default function DifferentiatedPanel() {
       dispatchEditor({ type: 'SELECT_PAGE', payload: newPage.id });
     } else {
       // 关闭时隐藏对话诊断页面（保留配置）
-      const convPage = courseData.pages.find(p => p.type === 'conversation-diagnosis');
+      const convPage = getCurrentConversationPage();
       if (convPage && !convPage.hidden) {
         const updatedPage: CoursePage = {
           ...convPage,
@@ -166,33 +215,74 @@ export default function DifferentiatedPanel() {
 
     const selectedPage = courseData.pages.find(p => p.id === editorState.selectedPage);
 
-    // 如果选中的不是诊断页面，清除绑定
-    if (!selectedPage || selectedPage.type !== 'diagnosis') {
+    // 如果选中的是试题诊断页面
+    if (selectedPage?.type === 'diagnosis') {
+      // 如果选中的诊断页面没有配置数据，也清除绑定
+      if (!selectedPage.diagnosisData?.config) {
+        setBoundPageId(null);
+        return;
+      }
+
+      // 自动切换到因材施教面板
+      if (editorState.activePanel !== 'differentiated') {
+        dispatchEditor({ type: 'SET_ACTIVE_PANEL', payload: 'differentiated' });
+      }
+
+      // 加载页面配置到侧边栏
+      const config = selectedPage.diagnosisData.config;
+      setKnowledgePoints(config.knowledgePoints);
+      setStudentLevels(config.studentLevels);
+      setSelectedDifficulties(config.selectedDifficulties);
+      setQuestionCounts(config.questionCounts);
+
+      // 检查该配置组是否有对话诊断页面（非隐藏）
+      const configGroupId = selectedPage.diagnosisData.configGroupId;
+      const hasConversationPage = courseData.pages.some(
+        p => p.type === 'conversation-diagnosis' &&
+        p.conversationDiagnosisData?.configGroupId === configGroupId &&
+        !p.hidden
+      );
+      setConversationEnabled(hasConversationPage);
+
+      setBoundPageId(selectedPage.id);
+      setShowStepPages(true);
+      setCurrentStep(1);
+    }
+    // 如果选中的是对话诊断页面
+    else if (selectedPage?.type === 'conversation-diagnosis') {
+      const configGroupId = selectedPage.conversationDiagnosisData?.configGroupId;
+      if (!configGroupId) {
+        setBoundPageId(null);
+        return;
+      }
+
+      // 找到对应的试题诊断页面
+      const diagnosisPage = courseData.pages.find(
+        p => p.type === 'diagnosis' && p.diagnosisData?.configGroupId === configGroupId
+      );
+
+      if (diagnosisPage?.diagnosisData?.config) {
+        // 自动切换到因材施教面板
+        if (editorState.activePanel !== 'differentiated') {
+          dispatchEditor({ type: 'SET_ACTIVE_PANEL', payload: 'differentiated' });
+        }
+
+        // 加载配置
+        const config = diagnosisPage.diagnosisData.config;
+        setKnowledgePoints(config.knowledgePoints);
+        setStudentLevels(config.studentLevels);
+        setSelectedDifficulties(config.selectedDifficulties);
+        setQuestionCounts(config.questionCounts);
+        setConversationEnabled(true);
+
+        setBoundPageId(diagnosisPage.id);
+        setShowStepPages(true);
+        setCurrentStep(1);
+      }
+    } else {
+      // 如果选中的不是诊断页面，清除绑定
       setBoundPageId(null);
-      return;
     }
-
-    // 如果选中的诊断页面没有配置数据，也清除绑定
-    if (!selectedPage.diagnosisData?.config) {
-      setBoundPageId(null);
-      return;
-    }
-
-    // 自动切换到因材施教面板
-    if (editorState.activePanel !== 'differentiated') {
-      dispatchEditor({ type: 'SET_ACTIVE_PANEL', payload: 'differentiated' });
-    }
-
-    // 加载页面配置到侧边栏
-    const config = selectedPage.diagnosisData.config;
-    setKnowledgePoints(config.knowledgePoints);
-    setStudentLevels(config.studentLevels);
-    setSelectedDifficulties(config.selectedDifficulties);
-    setQuestionCounts(config.questionCounts);
-    setConversationEnabled(config.conversationEnabled);
-    setBoundPageId(selectedPage.id);
-    setShowStepPages(true);
-    setCurrentStep(1);
   }, [editorState.selectedPage, courseData.pages]);
 
   // 上传教学设计
@@ -240,6 +330,27 @@ export default function DifferentiatedPanel() {
   // 更新知识点名称
   const handleUpdateKnowledgePoint = (id: string, name: string) => {
     setKnowledgePoints(knowledgePoints.map(point =>
+      point.id === id ? { ...point, name } : point
+    ));
+  };
+
+  // 分层教学 - 添加课时知识点
+  const handleAddTieredKnowledgePoint = () => {
+    const newPoint: KnowledgePoint = {
+      id: Date.now().toString(),
+      name: '',
+    };
+    setTieredKnowledgePoints([...tieredKnowledgePoints, newPoint]);
+  };
+
+  // 分层教学 - 删除课时知识点
+  const handleDeleteTieredKnowledgePoint = (id: string) => {
+    setTieredKnowledgePoints(tieredKnowledgePoints.filter(point => point.id !== id));
+  };
+
+  // 分层教学 - 更新课时知识点
+  const handleUpdateTieredKnowledgePoint = (id: string, name: string) => {
+    setTieredKnowledgePoints(tieredKnowledgePoints.map(point =>
       point.id === id ? { ...point, name } : point
     ));
   };
@@ -433,6 +544,8 @@ export default function DifferentiatedPanel() {
             questions: selectedQuestions,
             knowledgePoints: knowledgePoints.map(kp => kp.name),
             config,
+            configGroupId: existingPage.diagnosisData?.configGroupId || generateConfigGroupId(),
+            groupIndex: existingPage.diagnosisData?.groupIndex || getNextGroupIndex(),
           }
         };
         dispatchCourse({ type: 'UPDATE_PAGE', payload: updatedPage });
@@ -441,16 +554,22 @@ export default function DifferentiatedPanel() {
     }
 
     // 创建新的诊断页面
+    const configGroupId = generateConfigGroupId();
+    const groupIndex = getNextGroupIndex();
+
     const newPage: CoursePage = {
       id: `diagnosis-${Date.now()}`,
-      title: '因材施教-试题诊断',
+      title: `因材施教-试题诊断${groupIndex}`,
       type: 'diagnosis',
       elements: [],
       order: courseData.pages.length,
+      configGroupId,
       diagnosisData: {
         questions: selectedQuestions,
         knowledgePoints: knowledgePoints.map(kp => kp.name),
         config,
+        configGroupId,
+        groupIndex,
       }
     };
 
@@ -473,6 +592,204 @@ export default function DifferentiatedPanel() {
     if (currentStep === 1) {
       setCurrentStep(2);
     }
+  };
+
+  // 默认学习任务（按等级）
+  const getDefaultLearningTasks = (levelId: string): LearningTask[] => {
+    const tasks: Record<string, LearningTask[]> = {
+      '1': [ // 融会贯通
+        { id: 'task-1-1', title: '挑战进阶：力的综合应用', description: '综合运用力的三要素分析复杂情境，尝试解决生活中的力学问题' },
+        { id: 'task-1-2', title: '拓展探究：力的相互作用', description: '探究牛顿第三定律的应用，分析相互作用力的特点' },
+        { id: 'task-1-3', title: '创意实践：设计力学小实验', description: '设计一个展示力的作用效果的创意实验，并记录观察结果' }
+      ],
+      '2': [ // 掌握良好
+        { id: 'task-2-1', title: '巩固强化：力的三要素', description: '通过练习题巩固力的大小、方向、作用点的理解' },
+        { id: 'task-2-2', title: '概念深化：力的作用效果', description: '区分力使物体形变和改变运动状态这两种效果' },
+        { id: 'task-2-3', title: '实验观察：弹簧测力计的使用', description: '学习正确使用弹簧测力计测量力的大小' }
+      ],
+      '3': [ // 有待提升
+        { id: 'task-3-1', title: '基础回顾：什么是力', description: '复习力的定义，理解力是物体对物体的作用' },
+        { id: 'task-3-2', title: '逐步掌握：力的三要素', description: '通过图示和实例理解力的三要素' },
+        { id: 'task-3-3', title: '动手体验：感受力的作用', description: '通过简单实验感受力可以改变物体的形状和运动状态' }
+      ],
+      '4': [ // 基础薄弱
+        { id: 'task-4-1', title: '启蒙引导：认识力', description: '通过生活实例认识什么是力，建立初步概念' },
+        { id: 'task-4-2', title: '基础夯实：力的基本概念', description: '理解力必须有施力物体和受力物体' },
+        { id: 'task-4-3', title: '循序渐进：力的作用是相互的', description: '通过互推、拍手等活动体验力的相互性' }
+      ]
+    };
+    return tasks[levelId] || tasks['2'];
+  };
+
+  // 默认评价标准（按等级）
+  const getDefaultEvaluationCriteria = (levelId: string): EvaluationCriteria[] => {
+    const criteria: Record<string, EvaluationCriteria[]> = {
+      '1': [
+        { id: 'eval-1-1', name: '综合应用能力', description: '能够灵活运用力的概念解决复杂问题', weight: 40 },
+        { id: 'eval-1-2', name: '创新思维', description: '能提出有创意的解决方案或实验设计', weight: 30 },
+        { id: 'eval-1-3', name: '拓展探究', description: '能主动探索超出课本的知识内容', weight: 30 }
+      ],
+      '2': [
+        { id: 'eval-2-1', name: '概念理解', description: '准确理解力的三要素及其作用效果', weight: 40 },
+        { id: 'eval-2-2', name: '问题解决', description: '能运用所学知识解决标准问题', weight: 35 },
+        { id: 'eval-2-3', name: '实验技能', description: '能正确使用测量工具和记录数据', weight: 25 }
+      ],
+      '3': [
+        { id: 'eval-3-1', name: '基础掌握', description: '理解力的基本定义和三要素', weight: 50 },
+        { id: 'eval-3-2', name: '知识应用', description: '能在简单情境中识别和分析力', weight: 30 },
+        { id: 'eval-3-3', name: '学习态度', description: '积极参与学习活动，认真完成任务', weight: 20 }
+      ],
+      '4': [
+        { id: 'eval-4-1', name: '概念建立', description: '建立对力的初步认识', weight: 40 },
+        { id: 'eval-4-2', name: '学习进步', description: '相比学习前有明显进步', weight: 35 },
+        { id: 'eval-4-3', name: '参与度', description: '积极参与学习活动，愿意尝试', weight: 25 }
+      ]
+    };
+    return criteria[levelId] || criteria['2'];
+  };
+
+  // 默认学习表现等级
+  const getDefaultPerformanceLevels = (): LearningPerformanceLevel[] => [
+    { id: 'perf-1', name: '卓越表现', icon: '🏆', color: 'emerald', minScore: 90, maxScore: 100, description: '全面完成学习任务，表现突出，能够举一反三' },
+    { id: 'perf-2', name: '良好表现', icon: '⭐', color: 'blue', minScore: 75, maxScore: 89, description: '较好完成学习任务，理解深入，有一定创新' },
+    { id: 'perf-3', name: '基本达标', icon: '📈', color: 'amber', minScore: 60, maxScore: 74, description: '基本完成学习任务，掌握核心内容' },
+    { id: 'perf-4', name: '需要加强', icon: '💪', color: 'rose', minScore: 0, maxScore: 59, description: '学习任务完成度不足，需要额外辅导' },
+  ];
+
+  // 默认智能体配置（按等级）
+  const getDefaultAgentConfig = (levelId: string, levelName: string): TieredAgentConfig => {
+    const configs: Record<string, TieredAgentConfig> = {
+      '1': {
+        name: '探索导师',
+        role: '引导学生进行深度探究和创新思考',
+        avatar: '🚀',
+        guidanceStyle: 'inquiry',
+        conversationStyle: 'inspiring',
+        encouragementStyle: 'balanced',
+        maxRounds: 8,
+        specialFocus: '鼓励学生提出问题，引导自主探索'
+      },
+      '2': {
+        name: '提升助手',
+        role: '帮助学生巩固知识，突破难点',
+        avatar: '📈',
+        guidanceStyle: 'scaffolding',
+        conversationStyle: 'friendly',
+        encouragementStyle: 'balanced',
+        maxRounds: 6,
+        specialFocus: '关注薄弱环节，针对性强化'
+      },
+      '3': {
+        name: '耐心老师',
+        role: '循循善诱，帮助学生建立基础概念',
+        avatar: '🌱',
+        guidanceStyle: 'scaffolding',
+        conversationStyle: 'friendly',
+        encouragementStyle: 'enthusiastic',
+        maxRounds: 8,
+        specialFocus: '多用生活实例，降低理解难度'
+      },
+      '4': {
+        name: '启蒙伙伴',
+        role: '从零开始，建立学习信心',
+        avatar: '🤝',
+        guidanceStyle: 'direct',
+        conversationStyle: 'friendly',
+        encouragementStyle: 'enthusiastic',
+        maxRounds: 10,
+        specialFocus: '给予充分鼓励，培养学习兴趣'
+      }
+    };
+    return configs[levelId] || configs['2'];
+  };
+
+  // 生成分层教学页面
+  const handleGenerateTieredPage = () => {
+    if (studentLevels.length === 0) {
+      alert('请先完成认知起点诊断配置');
+      return;
+    }
+
+    if (tieredKnowledgePoints.length === 0 || tieredKnowledgePoints.every(kp => !kp.name.trim())) {
+      alert('请添加课时知识点');
+      return;
+    }
+
+    // 获取当前诊断页面的配置组ID
+    const diagnosisPage = getCurrentDiagnosisPage();
+    if (!diagnosisPage?.diagnosisData?.configGroupId) {
+      alert('请先生成试题诊断页面');
+      return;
+    }
+
+    const configGroupId = diagnosisPage.diagnosisData.configGroupId;
+    const groupIndex = diagnosisPage.diagnosisData.groupIndex || 1;
+
+    // 为每个学生等级创建分层配置
+    const tieredConfigs: TieredLevelConfig[] = studentLevels.map(level => ({
+      levelId: level.id,
+      levelName: level.name,
+      levelIcon: level.icon,
+      levelColor: level.colorClass,
+      learningTasks: getDefaultLearningTasks(level.id),
+      evaluationCriteria: getDefaultEvaluationCriteria(level.id),
+      performanceLevels: getDefaultPerformanceLevels(),
+      agentConfig: getDefaultAgentConfig(level.id, level.name),
+    }));
+
+    // 检查是否已存在该配置组的分层教学页面
+    const existingTieredPage = courseData.pages.find(
+      p => p.type === 'tiered-teaching' && p.tieredTeachingData?.configGroupId === configGroupId
+    );
+
+    if (existingTieredPage) {
+      // 更新现有页面
+      const updatedPage: CoursePage = {
+        ...existingTieredPage,
+        tieredTeachingData: {
+          configGroupId,
+          groupIndex,
+          lessonKnowledgePoints: tieredKnowledgePoints.filter(kp => kp.name.trim()),
+          studentLevels: [...studentLevels],
+          tieredConfigs,
+        }
+      };
+      dispatchCourse({ type: 'UPDATE_PAGE', payload: updatedPage });
+      dispatchEditor({ type: 'SELECT_PAGE', payload: existingTieredPage.id });
+      setBoundTieredPageId(existingTieredPage.id);
+      return;
+    }
+
+    // 找到该配置组最后一个页面的位置（对话诊断或试题诊断）
+    const conversationPage = courseData.pages.find(
+      p => p.type === 'conversation-diagnosis' && p.conversationDiagnosisData?.configGroupId === configGroupId
+    );
+    const lastPageInGroup = conversationPage || diagnosisPage;
+    const insertOrder = lastPageInGroup.order + 1;
+
+    // 创建新的分层教学页面
+    const newPage: CoursePage = {
+      id: `tiered-teaching-${Date.now()}`,
+      title: `因材施教-分层教学${groupIndex}`,
+      type: 'tiered-teaching',
+      elements: [],
+      order: insertOrder,
+      configGroupId,
+      tieredTeachingData: {
+        configGroupId,
+        groupIndex,
+        lessonKnowledgePoints: tieredKnowledgePoints.filter(kp => kp.name.trim()),
+        studentLevels: [...studentLevels],
+        tieredConfigs,
+      }
+    };
+
+    // 添加页面
+    dispatchCourse({ type: 'ADD_PAGE', payload: newPage });
+
+    // 选中新页面
+    dispatchEditor({ type: 'SELECT_PAGE', payload: newPage.id });
+    setBoundTieredPageId(newPage.id);
   };
 
   return (
@@ -779,15 +1096,128 @@ export default function DifferentiatedPanel() {
                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
                     </label>
                   </div>
-                  <p className="mt-3 text-sm text-gray-600">开启后将自动创建对话诊断页面</p>
+                  <p className="mt-3 text-sm text-gray-600">开启后将自动创建对话诊断页面,请在右侧完成配置。</p>
                 </div>
               </div>
             ) : (
               // 第二步：分层教学
-              <div className="flex-1 overflow-y-auto p-5">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">分层教学</h2>
+              <div className="flex-1 overflow-y-auto p-5 space-y-3">
+                <div className="flex items-center gap-2 mb-4">
+                  <button
+                    onClick={handlePreviousStep}
+                    className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                  </button>
+                  <h2 className="text-lg font-bold text-gray-900">分层教学</h2>
+                </div>
+
+                {/* 1. 课时知识点 */}
                 <div className="bg-gray-50 rounded-xl p-4">
-                  <p className="text-sm text-gray-600">根据诊断结果，为不同层次学生设计差异化教学内容。</p>
+                  <div className="flex items-start gap-2 mb-3">
+                    <span className="text-xl">🎯</span>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-gray-900">课时知识点</div>
+                      <div className="text-xs text-gray-500">本节课学习目标</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {tieredKnowledgePoints.map((point) => (
+                      <div key={point.id} className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={point.name}
+                          onChange={(e) => handleUpdateTieredKnowledgePoint(point.id, e.target.value)}
+                          placeholder="输入知识点名称"
+                          className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        />
+                        <button
+                          onClick={() => handleDeleteTieredKnowledgePoint(point.id)}
+                          className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={handleAddTieredKnowledgePoint}
+                    className="mt-3 text-sm text-teal-600 font-medium hover:text-teal-700"
+                  >
+                    + 添加知识点
+                  </button>
+                </div>
+
+                {/* 2. 认知起点分层（只读） */}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-start gap-2 mb-3">
+                    <span className="text-xl">🏷️</span>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-gray-900">认知起点分层</div>
+                      <div className="text-xs text-gray-500">来自认知起点诊断配置（不可编辑）</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    {studentLevels.map((level) => {
+                      const colorMap: Record<string, string> = {
+                        emerald: 'bg-emerald-100 border-emerald-300 text-emerald-700',
+                        teal: 'bg-teal-100 border-teal-300 text-teal-700',
+                        amber: 'bg-amber-100 border-amber-300 text-amber-700',
+                        rose: 'bg-rose-100 border-rose-300 text-rose-700',
+                        gray: 'bg-gray-100 border-gray-300 text-gray-700',
+                      };
+                      const colorClass = colorMap[level.colorClass] || colorMap.gray;
+                      return (
+                        <div
+                          key={level.id}
+                          className={`rounded-lg p-3 border ${colorClass}`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg">{level.icon}</span>
+                            <span className="font-medium text-sm">{level.name}</span>
+                            <span className="ml-auto text-xs opacity-75">{level.minScore}-{level.maxScore}分</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {studentLevels.length === 0 && (
+                    <div className="text-center py-4 text-gray-400 text-sm">
+                      请先完成认知起点诊断配置
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. 生成分层教学页面按钮 */}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-start gap-2 mb-3">
+                    <span className="text-xl">📚</span>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-gray-900">分层教学页面</div>
+                      <div className="text-xs text-gray-500">为每个认知层次配置差异化学习内容</div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleGenerateTieredPage}
+                    disabled={studentLevels.length === 0 || tieredKnowledgePoints.length === 0}
+                    className={`w-full h-10 rounded-xl text-sm font-semibold transition-colors ${
+                      studentLevels.length > 0 && tieredKnowledgePoints.length > 0
+                        ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white hover:from-teal-600 hover:to-cyan-600'
+                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {boundTieredPageId ? '更新页面' : '生成页面'}
+                  </button>
+                  {(studentLevels.length === 0 || tieredKnowledgePoints.length === 0) && (
+                    <p className="mt-2 text-xs text-gray-500 text-center">
+                      {studentLevels.length === 0 ? '请先完成认知起点诊断配置' : '请添加课时知识点'}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -808,7 +1238,12 @@ export default function DifferentiatedPanel() {
               {currentStep === 1 && (
                 <button
                   onClick={handleNextStep}
-                  className="ml-auto flex items-center gap-2 h-10 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold hover:from-emerald-600 hover:to-teal-600 transition-colors"
+                  disabled={!boundPageId}
+                  className={`ml-auto flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold transition-colors ${
+                    boundPageId
+                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600'
+                      : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                  }`}
                 >
                   下一步
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

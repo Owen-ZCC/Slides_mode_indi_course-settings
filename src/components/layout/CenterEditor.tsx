@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useEditor } from '@/store/EditorContext';
 import { TextIcon, ImageIcon, TableIcon, CircleIcon, ChevronDownIcon, EditIcon, TrashIcon, CopyIcon, CheckIcon, MessageIcon, CameraIcon, ListIcon, MenuIcon, PenToolIcon, CardIcon, CodeIcon, LayersIcon, PlusIcon } from '@/components/icons';
-import { ToolType, DiagnosisQuestion, CoursePage, ConversationDiagnosisConfig, DialogueStyle, ScoringPreference, EncouragementStyle, VoiceConfig, AvatarConfig, BackgroundConfig } from '@/types';
+import { ToolType, DiagnosisQuestion, CoursePage, ConversationDiagnosisConfig, DialogueStyle, ScoringPreference, EncouragementStyle, VoiceConfig, AvatarConfig, BackgroundConfig, TieredTeachingPageData, TieredLevelConfig, LearningTask, EvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle } from '@/types';
+import TieredTeachingEditor from '@/components/panels/TieredTeachingEditor';
 
 // 工具配置
 const toolConfigs: Record<ToolType, { name: string; icon: React.ReactNode }> = {
@@ -1802,7 +1803,7 @@ function ToolEditArea({ toolType }: { toolType: ToolType }) {
 }
 
 export default function CenterEditor() {
-  const { courseData, editorState, dispatchEditor } = useEditor();
+  const { courseData, editorState, dispatchEditor, dispatchCourse } = useEditor();
 
   // 工具模式
   if (editorState.editorMode === 'tool' && editorState.currentTool) {
@@ -1884,6 +1885,11 @@ export default function CenterEditor() {
             return <ConversationDiagnosisEditor page={selectedPage} />;
           }
 
+          // 如果是分层教学页面，渲染分层教学编辑器
+          if (selectedPage?.type === 'tiered-teaching') {
+            return <TieredTeachingEditor page={selectedPage} />;
+          }
+
           // 默认内容
           return (
             <div className="flex-1 w-full h-auto bg-white shadow-none rounded-none flex items-center justify-center p-10">
@@ -1917,11 +1923,12 @@ export default function CenterEditor() {
               const isSelected = editorState.selectedPage === page.id;
               const isDiagnosis = page.type === 'diagnosis';
               const isConversationDiagnosis = page.type === 'conversation-diagnosis';
-              const isSpecialPage = isDiagnosis || isConversationDiagnosis;
+              const isTieredTeaching = page.type === 'tiered-teaching';
+              const isSpecialPage = isDiagnosis || isConversationDiagnosis || isTieredTeaching;
               return (
                 <div
                   key={page.id}
-                  className="relative flex items-center gap-3.5 z-[1]"
+                  className="relative flex items-center gap-3.5 z-[1] group"
                   onClick={() => dispatchEditor({ type: 'SELECT_PAGE', payload: page.id })}
                 >
                   <div className={`w-[190px] h-[110px] flex-shrink-0 rounded-xl border-2 bg-white cursor-pointer relative transition-all flex flex-col items-center justify-center text-xs ${
@@ -1934,12 +1941,22 @@ export default function CenterEditor() {
                     <span className="absolute top-2 left-2.5 text-[11px] font-bold text-gray-500 bg-white w-6 h-6 rounded-md flex items-center justify-center">
                       {index + 1}
                     </span>
-                    {isDiagnosis && (
-                      <span className="absolute top-2 right-2.5 text-sm">📝</span>
-                    )}
-                    {isConversationDiagnosis && (
-                      <span className="absolute top-2 right-2.5 text-sm">💬</span>
-                    )}
+                    {/* 删除按钮 */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm('确定要删除此页面吗？')) {
+                          dispatchCourse({ type: 'DELETE_PAGE', payload: page.id });
+                          if (editorState.selectedPage === page.id) {
+                            dispatchEditor({ type: 'SELECT_PAGE', payload: null });
+                          }
+                        }
+                      }}
+                      className="absolute top-2 right-2.5 w-6 h-6 rounded-md flex items-center justify-center text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500 transition-all z-10"
+                      title="删除页面"
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
                     <span className={`text-sm ${isSelected ? (isSpecialPage ? 'text-emerald-600 font-medium' : 'text-orange-600 font-medium') : 'text-gray-500'}`}>
                       {page.title}
                     </span>
@@ -1949,7 +1966,20 @@ export default function CenterEditor() {
             })}
 
             {/* 添加页面按钮 */}
-            <button className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 bg-white cursor-pointer flex items-center justify-center text-gray-400 text-xl transition-all flex-shrink-0 hover:border-orange-500 hover:border-solid hover:text-orange-500 hover:bg-orange-50">
+            <button
+              onClick={() => {
+                const newPage: CoursePage = {
+                  id: `page-${Date.now()}`,
+                  title: `页面 ${courseData.pages.length + 1}`,
+                  type: 'content',
+                  elements: [],
+                  order: courseData.pages.length,
+                };
+                dispatchCourse({ type: 'ADD_PAGE', payload: newPage });
+                dispatchEditor({ type: 'SELECT_PAGE', payload: newPage.id });
+              }}
+              className="w-10 h-10 rounded-full border-2 border-dashed border-gray-300 bg-white cursor-pointer flex items-center justify-center text-gray-400 text-xl transition-all flex-shrink-0 hover:border-orange-500 hover:border-solid hover:text-orange-500 hover:bg-orange-50"
+            >
               +
             </button>
           </div>
