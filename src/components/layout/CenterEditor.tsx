@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useEditor } from '@/store/EditorContext';
 import { TextIcon, ImageIcon, TableIcon, CircleIcon, ChevronDownIcon, EditIcon, TrashIcon, CopyIcon, CheckIcon, MessageIcon, CameraIcon, ListIcon, MenuIcon, PenToolIcon, CardIcon, CodeIcon, LayersIcon, PlusIcon } from '@/components/icons';
-import { ToolType, DiagnosisQuestion, CoursePage, ConversationDiagnosisConfig, DialogueStyle, ScoringPreference, EncouragementStyle, VoiceConfig, AvatarConfig, BackgroundConfig, TieredTeachingPageData, TieredLevelConfig, LearningTask, EvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle } from '@/types';
+import { ToolType, DiagnosisQuestion, CoursePage, ConversationDiagnosisConfig, DialogueStyle, ScoringPreference, EncouragementStyle, VoiceConfig, AvatarConfig, BackgroundConfig, TieredTeachingPageData, TieredLevelConfig, LearningTask, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle } from '@/types';
 import TieredTeachingEditor from '@/components/panels/TieredTeachingEditor';
 
 // 工具配置
@@ -1804,6 +1804,189 @@ function ToolEditArea({ toolType }: { toolType: ToolType }) {
 
 export default function CenterEditor() {
   const { courseData, editorState, dispatchEditor, dispatchCourse } = useEditor();
+  const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
+  const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
+
+  // 获取页面的配置组ID
+  const getPageConfigGroupId = (page: CoursePage): string | undefined => {
+    return page.configGroupId ||
+           page.diagnosisData?.configGroupId ||
+           page.conversationDiagnosisData?.configGroupId ||
+           page.tieredTeachingData?.configGroupId;
+  };
+
+  // 验证拖拽是否有效
+  const isValidDragDrop = (draggedPage: CoursePage, targetPage: CoursePage, targetIndex: number): { valid: boolean; message?: string } => {
+    const visiblePages = courseData.pages.filter(p => !p.hidden);
+    const draggedGroupId = getPageConfigGroupId(draggedPage);
+    const targetGroupId = getPageConfigGroupId(targetPage);
+
+    // 如果拖拽的是分层教学页面，不能放在诊断页面之前
+    if (draggedPage.type === 'tiered-teaching' && draggedGroupId) {
+      // 找到同配置组的试题诊断页面
+      const diagnosisPage = visiblePages.find(p =>
+        p.type === 'diagnosis' &&
+        getPageConfigGroupId(p) === draggedGroupId
+      );
+      // 找到同配置组的对话诊断页面
+      const conversationPage = visiblePages.find(p =>
+        p.type === 'conversation-diagnosis' &&
+        getPageConfigGroupId(p) === draggedGroupId
+      );
+
+      if (diagnosisPage) {
+        const diagnosisIndex = visiblePages.indexOf(diagnosisPage);
+        if (targetIndex <= diagnosisIndex) {
+          return {
+            valid: false,
+            message: '学生须完成"认知起点诊断"才能进入"分层教学"'
+          };
+        }
+      }
+
+      if (conversationPage) {
+        const conversationIndex = visiblePages.indexOf(conversationPage);
+        if (targetIndex <= conversationIndex) {
+          return {
+            valid: false,
+            message: '学生须完成"认知起点诊断"才能进入"分层教学"'
+          };
+        }
+      }
+    }
+
+    // 如果拖拽的是对话诊断页面，不能放在试题诊断页面之前
+    if (draggedPage.type === 'conversation-diagnosis' && draggedGroupId) {
+      const diagnosisPage = visiblePages.find(p =>
+        p.type === 'diagnosis' &&
+        getPageConfigGroupId(p) === draggedGroupId
+      );
+
+      if (diagnosisPage) {
+        const diagnosisIndex = visiblePages.indexOf(diagnosisPage);
+        if (targetIndex <= diagnosisIndex) {
+          return {
+            valid: false,
+            message: '学生须完成"试题诊断"才能进入"对话诊断"'
+          };
+        }
+      }
+    }
+
+    // 不同配置组的页面不能穿插
+    if (draggedGroupId && targetGroupId && draggedGroupId !== targetGroupId) {
+      // 获取拖拽页面所属配置组的所有页面
+      const draggedGroupPages = visiblePages.filter(p => getPageConfigGroupId(p) === draggedGroupId);
+      // 获取目标页面所属配置组的所有页面
+      const targetGroupPages = visiblePages.filter(p => getPageConfigGroupId(p) === targetGroupId);
+
+      // 如果两个组都有多个页面，检查是否会导致穿插
+      if (draggedGroupPages.length > 1 || targetGroupPages.length > 1) {
+        // 计算拖拽后的新位置
+        const draggedGroupIndices = draggedGroupPages
+          .filter(p => p.id !== draggedPage.id)
+          .map(p => visiblePages.indexOf(p));
+
+        if (draggedGroupIndices.length > 0) {
+          const minDraggedIndex = Math.min(...draggedGroupIndices);
+          const maxDraggedIndex = Math.max(...draggedGroupIndices);
+
+          // 如果目标位置在拖拽组的范围之外，检查是否会导致穿插
+          if (targetIndex < minDraggedIndex || targetIndex > maxDraggedIndex) {
+            // 检查目标组的范围
+            const targetGroupIndices = targetGroupPages.map(p => visiblePages.indexOf(p));
+            const minTargetIndex = Math.min(...targetGroupIndices);
+            const maxTargetIndex = Math.max(...targetGroupIndices);
+
+            // 如果目标位置在目标组的范围内，会导致穿插
+            if (targetIndex >= minTargetIndex && targetIndex <= maxTargetIndex) {
+              return {
+                valid: false,
+                message: '不同的"因材施教"设置不能穿插'
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return { valid: true };
+  };
+
+  // 处理拖拽开始
+  const handleDragStart = (e: React.DragEvent, pageId: string) => {
+    setDraggedPageId(pageId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  // 处理拖拽结束
+  const handleDragEnd = () => {
+    setDraggedPageId(null);
+    setDragOverPageId(null);
+  };
+
+  // 处理拖拽悬停
+  const handleDragOver = (e: React.DragEvent, pageId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverPageId(pageId);
+  };
+
+  // 处理拖拽离开
+  const handleDragLeave = () => {
+    setDragOverPageId(null);
+  };
+
+  // 处理拖拽放下
+  const handleDrop = (e: React.DragEvent, targetPageId: string) => {
+    e.preventDefault();
+
+    if (!draggedPageId || draggedPageId === targetPageId) {
+      handleDragEnd();
+      return;
+    }
+
+    const visiblePages = courseData.pages.filter(p => !p.hidden);
+    const draggedPage = visiblePages.find(p => p.id === draggedPageId);
+    const targetPage = visiblePages.find(p => p.id === targetPageId);
+
+    if (!draggedPage || !targetPage) {
+      handleDragEnd();
+      return;
+    }
+
+    const targetIndex = visiblePages.indexOf(targetPage);
+    const validation = isValidDragDrop(draggedPage, targetPage, targetIndex);
+
+    if (!validation.valid) {
+      alert(validation.message);
+      handleDragEnd();
+      return;
+    }
+
+    // 重新排序页面（包括隐藏页面）
+    const allPages = [...courseData.pages];
+    const draggedPageIndex = allPages.findIndex(p => p.id === draggedPageId);
+    const targetPageIndex = allPages.findIndex(p => p.id === targetPageId);
+
+    // 移除拖拽的页面
+    const [removed] = allPages.splice(draggedPageIndex, 1);
+
+    // 计算新的插入位置
+    const newTargetIndex = draggedPageIndex < targetPageIndex ? targetPageIndex - 1 : targetPageIndex;
+
+    // 插入到目标位置
+    allPages.splice(newTargetIndex, 0, removed);
+
+    // 更新order属性
+    const reorderedPages = allPages.map((page, index) => ({
+      ...page,
+      order: index
+    }));
+
+    dispatchCourse({ type: 'REORDER_PAGES', payload: reorderedPages });
+    handleDragEnd();
+  };
 
   // 工具模式
   if (editorState.editorMode === 'tool' && editorState.currentTool) {
@@ -1925,22 +2108,56 @@ export default function CenterEditor() {
               const isConversationDiagnosis = page.type === 'conversation-diagnosis';
               const isTieredTeaching = page.type === 'tiered-teaching';
               const isSpecialPage = isDiagnosis || isConversationDiagnosis || isTieredTeaching;
+              const isDragging = draggedPageId === page.id;
+              const isDragOver = dragOverPageId === page.id;
               return (
                 <div
                   key={page.id}
-                  className="relative flex items-center gap-3.5 z-[1] group"
-                  onClick={() => dispatchEditor({ type: 'SELECT_PAGE', payload: page.id })}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, page.id)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={(e) => handleDragOver(e, page.id)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, page.id)}
+                  className={`relative flex items-center gap-3.5 z-[1] group cursor-grab active:cursor-grabbing ${
+                    isDragging ? 'opacity-50' : ''
+                  }`}
+                  onClick={() => {
+                    dispatchEditor({ type: 'SELECT_PAGE', payload: page.id });
+                    if (isSpecialPage) {
+                      // 因材施教相关页面：打开侧边栏并切换到因材施教面板
+                      dispatchEditor({ type: 'SET_ACTIVE_PANEL', payload: 'differentiated' });
+                    } else {
+                      // 空白页面：收起侧边栏并清除菜单选中状态
+                      dispatchEditor({ type: 'CLEAR_ACTIVE_PANEL' });
+                    }
+                  }}
                 >
                   <div className={`w-[190px] h-[110px] flex-shrink-0 rounded-xl border-2 bg-white cursor-pointer relative transition-all flex flex-col items-center justify-center text-xs ${
-                    isSelected
-                      ? isSpecialPage
-                        ? 'border-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.1)]'
-                        : 'border-orange-500 shadow-[0_0_0_2px_rgba(255,149,0,0.1)]'
-                      : 'border-gray-200 hover:border-gray-300 hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(0,0,0,0.08)]'
+                    isDragOver
+                      ? 'border-blue-500 bg-blue-50 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]'
+                      : isSelected
+                        ? isSpecialPage
+                          ? 'border-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.1)]'
+                          : 'border-orange-500 shadow-[0_0_0_2px_rgba(255,149,0,0.1)]'
+                        : isSpecialPage
+                          ? 'border-gray-200 hover:border-gray-300 hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(0,0,0,0.08)]'
+                          : 'border-gray-200'
                   }`}>
                     <span className="absolute top-2 left-2.5 text-[11px] font-bold text-gray-500 bg-white w-6 h-6 rounded-md flex items-center justify-center">
                       {index + 1}
                     </span>
+                    {/* 拖拽手柄 */}
+                    <div className="absolute top-2 left-10 w-5 h-5 rounded-md flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="9" cy="5" r="1" fill="currentColor" />
+                        <circle cx="9" cy="12" r="1" fill="currentColor" />
+                        <circle cx="9" cy="19" r="1" fill="currentColor" />
+                        <circle cx="15" cy="5" r="1" fill="currentColor" />
+                        <circle cx="15" cy="12" r="1" fill="currentColor" />
+                        <circle cx="15" cy="19" r="1" fill="currentColor" />
+                      </svg>
+                    </div>
                     {/* 删除按钮 */}
                     <button
                       onClick={(e) => {

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useEditor } from '@/store/EditorContext';
-import { CoursePage, TieredLevelConfig, LearningTask, EvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle } from '@/types';
+import { CoursePage, TieredLevelConfig, LearningTask, TaskEvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle } from '@/types';
 
 interface TieredTeachingEditorProps {
   page: CoursePage;
@@ -11,8 +11,11 @@ interface TieredTeachingEditorProps {
 export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps) {
   const { dispatchCourse } = useEditor();
   const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<'tasks' | 'criteria' | 'performance' | 'agent'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'agent'>('tasks');
   const [isDebugMode, setIsDebugMode] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [isPromptExpanded, setIsPromptExpanded] = useState(true);
 
   const tieredData = page.tieredTeachingData;
 
@@ -28,6 +31,13 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
   }
 
   const currentConfig = tieredData.tieredConfigs[currentLevelIndex];
+
+  // 同步 isAdvancedMode 状态
+  useEffect(() => {
+    if (currentConfig?.agentConfig?.isAdvancedMode !== undefined) {
+      setIsAdvancedMode(currentConfig.agentConfig.isAdvancedMode);
+    }
+  }, [currentLevelIndex, currentConfig?.agentConfig?.isAdvancedMode]);
 
   // 更新当前配置
   const updateCurrentConfig = (updates: Partial<TieredLevelConfig>) => {
@@ -59,6 +69,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
       id: `task-${Date.now()}`,
       title: '',
       description: '',
+      evaluationCriteria: [],
     };
     updateCurrentConfig({ learningTasks: [...currentConfig.learningTasks, newTask] });
   };
@@ -69,29 +80,46 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
     updateCurrentConfig({ learningTasks: updatedTasks });
   };
 
-  // 更新评价标准
-  const updateEvaluationCriteria = (criteriaId: string, updates: Partial<EvaluationCriteria>) => {
-    const updatedCriteria = currentConfig.evaluationCriteria.map(criteria =>
-      criteria.id === criteriaId ? { ...criteria, ...updates } : criteria
-    );
-    updateCurrentConfig({ evaluationCriteria: updatedCriteria });
+  // 更新任务内的评价标准
+  const updateTaskEvaluationCriteria = (taskId: string, criteriaId: string, updates: Partial<TaskEvaluationCriteria>) => {
+    const updatedTasks = currentConfig.learningTasks.map(task => {
+      if (task.id === taskId) {
+        const updatedCriteria = (task.evaluationCriteria || []).map(criteria =>
+          criteria.id === criteriaId ? { ...criteria, ...updates } : criteria
+        );
+        return { ...task, evaluationCriteria: updatedCriteria };
+      }
+      return task;
+    });
+    updateCurrentConfig({ learningTasks: updatedTasks });
   };
 
-  // 添加评价标准
-  const addEvaluationCriteria = () => {
-    const newCriteria: EvaluationCriteria = {
+  // 添加任务内的评价标准
+  const addTaskEvaluationCriteria = (taskId: string) => {
+    const newCriteria: TaskEvaluationCriteria = {
       id: `criteria-${Date.now()}`,
       name: '',
       description: '',
       weight: 0,
     };
-    updateCurrentConfig({ evaluationCriteria: [...currentConfig.evaluationCriteria, newCriteria] });
+    const updatedTasks = currentConfig.learningTasks.map(task => {
+      if (task.id === taskId) {
+        return { ...task, evaluationCriteria: [...(task.evaluationCriteria || []), newCriteria] };
+      }
+      return task;
+    });
+    updateCurrentConfig({ learningTasks: updatedTasks });
   };
 
-  // 删除评价标准
-  const deleteEvaluationCriteria = (criteriaId: string) => {
-    const updatedCriteria = currentConfig.evaluationCriteria.filter(criteria => criteria.id !== criteriaId);
-    updateCurrentConfig({ evaluationCriteria: updatedCriteria });
+  // 删除任务内的评价标准
+  const deleteTaskEvaluationCriteria = (taskId: string, criteriaId: string) => {
+    const updatedTasks = currentConfig.learningTasks.map(task => {
+      if (task.id === taskId) {
+        return { ...task, evaluationCriteria: (task.evaluationCriteria || []).filter(c => c.id !== criteriaId) };
+      }
+      return task;
+    });
+    updateCurrentConfig({ learningTasks: updatedTasks });
   };
 
   // 更新学习表现等级
@@ -137,6 +165,51 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
     return labels[style];
   };
 
+  // 获取默认高级提示词
+  const getDefaultAdvancedPrompt = () => {
+    const levelName = currentConfig.levelName;
+    const agentName = currentConfig.agentConfig.name;
+    const agentRole = currentConfig.agentConfig.role;
+
+    return `# 角色设定
+你是「${agentName}」，${agentRole}。你正在为「${levelName}」层次的学生提供个性化学习辅导。
+
+# 学生特点
+根据认知起点诊断，该层次学生的特点是：
+- 需要针对性的学习指导
+- 适合循序渐进的学习方式
+- 需要适当的鼓励和反馈
+
+# 交流风格
+- 使用亲切友好的语气
+- 适当使用鼓励性语言
+- 根据学生回答调整指导策略
+
+# 指导策略
+1. 先了解学生当前的理解程度
+2. 根据学生水平调整讲解深度
+3. 使用生活实例帮助理解
+4. 及时给予正面反馈
+5. 错误时引导而非直接纠正
+
+# 学习任务引导
+1. 介绍学习任务的目标和要求
+2. 分步骤引导学生完成任务
+3. 在关键节点检查学生理解
+4. 总结学习成果和进步
+
+# 评价标准
+- 根据任务完成度评价学习表现
+- 考虑学生的思维过程和努力程度
+- 给予建设性的改进建议
+
+# 反馈生成规则
+- 针对每个学习任务给出具体评价
+- 提供个性化学习建议
+- 指出需要加强的方向
+- 鼓励学生继续努力`;
+  };
+
   // 调试模式
   const handleDebug = () => {
     // 检查是否所有必填项都已配置
@@ -144,8 +217,12 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
       alert('请完成学习任务配置');
       return;
     }
-    if (currentConfig.evaluationCriteria.length === 0 || currentConfig.evaluationCriteria.some(c => !c.name || !c.description)) {
-      alert('请完成评价标准配置');
+    // 检查每个任务是否有评价标准
+    const hasIncompleteCriteria = currentConfig.learningTasks.some(t =>
+      !t.evaluationCriteria || t.evaluationCriteria.length === 0 || t.evaluationCriteria.some(c => !c.name || !c.description)
+    );
+    if (hasIncompleteCriteria) {
+      alert('请为每个学习任务配置评价标准');
       return;
     }
     if (currentConfig.performanceLevels.length === 0) {
@@ -207,26 +284,6 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
             学习任务
           </button>
           <button
-            onClick={() => setActiveTab('criteria')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'criteria'
-                ? 'bg-teal-50 text-teal-700'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            评价标准
-          </button>
-          <button
-            onClick={() => setActiveTab('performance')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              activeTab === 'performance'
-                ? 'bg-teal-50 text-teal-700'
-                : 'text-gray-600 hover:bg-gray-50'
-            }`}
-          >
-            学习表现等级
-          </button>
-          <button
             onClick={() => setActiveTab('agent')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'agent'
@@ -257,256 +314,339 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                   + 添加任务
                 </button>
               </div>
-              {currentConfig.learningTasks.map((task, index) => (
-                <div key={task.id} className="bg-gray-50 rounded-xl p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <span className="text-sm font-medium text-gray-700">任务 {index + 1}</span>
-                    <button
-                      onClick={() => deleteLearningTask(task.id)}
-                      className="text-red-500 hover:text-red-700 text-sm"
-                    >
-                      删除
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={task.title}
-                    onChange={(e) => updateLearningTask(task.id, { title: e.target.value })}
-                    placeholder="任务标题"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                  <textarea
-                    value={task.description}
-                    onChange={(e) => updateLearningTask(task.id, { description: e.target.value })}
-                    placeholder="任务描述"
-                    rows={3}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'criteria' && (
-            <div className="max-w-4xl mx-auto space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">评价标准</h3>
-                <button
-                  onClick={addEvaluationCriteria}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors"
-                >
-                  + 添加标准
-                </button>
-              </div>
-              {currentConfig.evaluationCriteria.map((criteria, index) => (
-                <div key={criteria.id} className="bg-gray-50 rounded-xl p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <span className="text-sm font-medium text-gray-700">标准 {index + 1}</span>
-                    <button
-                      onClick={() => deleteEvaluationCriteria(criteria.id)}
-                      className="text-red-500 hover:text-red-700 text-sm"
-                    >
-                      删除
-                    </button>
-                  </div>
-                  <input
-                    type="text"
-                    value={criteria.name}
-                    onChange={(e) => updateEvaluationCriteria(criteria.id, { name: e.target.value })}
-                    placeholder="评价维度"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                  />
-                  <textarea
-                    value={criteria.description}
-                    onChange={(e) => updateEvaluationCriteria(criteria.id, { description: e.target.value })}
-                    placeholder="评价细则"
-                    rows={2}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-                  />
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">权重:</label>
-                    <input
-                      type="number"
-                      value={criteria.weight}
-                      onChange={(e) => updateEvaluationCriteria(criteria.id, { weight: parseInt(e.target.value) || 0 })}
-                      min="0"
-                      max="100"
-                      className="w-20 px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                    <span className="text-sm text-gray-600">%</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {activeTab === 'performance' && (
-            <div className="max-w-4xl mx-auto space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">学习表现等级</h3>
-              {currentConfig.performanceLevels.map((level, index) => (
-                <div key={level.id} className="bg-gray-50 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center gap-3">
-                    <span className="text-2xl">{level.icon}</span>
+              {currentConfig.learningTasks.map((task, index) => {
+                const isSelected = selectedTaskId === task.id;
+                return (
+                  <div
+                    key={task.id}
+                    className={`rounded-xl p-4 space-y-3 cursor-pointer transition-all border-2 ${
+                      isSelected
+                        ? 'bg-emerald-50 border-emerald-400 shadow-sm'
+                        : 'bg-gray-50 border-transparent hover:bg-emerald-50/50 hover:border-emerald-200'
+                    }`}
+                    onClick={() => setSelectedTaskId(isSelected ? null : task.id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-gray-700'}`}>
+                        任务 {index + 1}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteLearningTask(task.id);
+                        }}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                      >
+                        删除
+                      </button>
+                    </div>
                     <input
                       type="text"
-                      value={level.name}
-                      onChange={(e) => updatePerformanceLevel(level.id, { name: e.target.value })}
-                      className="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      value={task.title}
+                      onChange={(e) => updateLearningTask(task.id, { title: e.target.value })}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="任务标题"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
                     />
-                  </div>
-                  <textarea
-                    value={level.description}
-                    onChange={(e) => updatePerformanceLevel(level.id, { description: e.target.value })}
-                    placeholder="等级描述"
-                    rows={2}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-                  />
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600">最低分:</label>
-                      <input
-                        type="number"
-                        value={level.minScore}
-                        onChange={(e) => updatePerformanceLevel(level.id, { minScore: parseInt(e.target.value) || 0 })}
-                        min="0"
-                        max="100"
-                        className="w-20 px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      />
+                    <textarea
+                      value={task.description}
+                      onChange={(e) => updateLearningTask(task.id, { description: e.target.value })}
+                      onClick={(e) => e.stopPropagation()}
+                      placeholder="任务描述"
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none bg-white"
+                    />
+
+                    {/* 评价标准部分 */}
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-gray-700'}`}>
+                          评价标准
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addTaskEvaluationCriteria(task.id);
+                          }}
+                          className="px-2 py-1 rounded text-xs font-medium bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors"
+                        >
+                          + 添加标准
+                        </button>
+                      </div>
+                      {(task.evaluationCriteria || []).length === 0 ? (
+                        <div className="text-sm text-gray-400 text-center py-2">
+                          暂无评价标准，点击上方按钮添加
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {(task.evaluationCriteria || []).map((criteria, cIndex) => (
+                            <div key={criteria.id} className="bg-white rounded-lg p-3 space-y-2 border border-gray-200">
+                              <div className="flex items-start justify-between">
+                                <span className="text-xs font-medium text-gray-500">标准 {cIndex + 1}</span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteTaskEvaluationCriteria(task.id, criteria.id);
+                                  }}
+                                  className="text-red-500 hover:text-red-700 text-xs"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                value={criteria.name}
+                                onChange={(e) => updateTaskEvaluationCriteria(task.id, criteria.id, { name: e.target.value })}
+                                onClick={(e) => e.stopPropagation()}
+                                placeholder="评价维度"
+                                className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              />
+                              <textarea
+                                value={criteria.description}
+                                onChange={(e) => updateTaskEvaluationCriteria(task.id, criteria.id, { description: e.target.value })}
+                                onClick={(e) => e.stopPropagation()}
+                                placeholder="评价细则"
+                                rows={2}
+                                className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                              />
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-gray-600">权重:</label>
+                                <input
+                                  type="number"
+                                  value={criteria.weight}
+                                  onChange={(e) => updateTaskEvaluationCriteria(task.id, criteria.id, { weight: parseInt(e.target.value) || 0 })}
+                                  onClick={(e) => e.stopPropagation()}
+                                  min="0"
+                                  max="100"
+                                  className="w-16 px-2 py-1 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                />
+                                <span className="text-xs text-gray-600">%</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <label className="text-sm text-gray-600">最高分:</label>
-                      <input
-                        type="number"
-                        value={level.maxScore}
-                        onChange={(e) => updatePerformanceLevel(level.id, { maxScore: parseInt(e.target.value) || 0 })}
-                        min="0"
-                        max="100"
-                        className="w-20 px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                      />
-                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
           {activeTab === 'agent' && (
             <div className="max-w-4xl mx-auto space-y-6">
-              <h3 className="text-lg font-semibold text-gray-900">智能学伴配置</h3>
-
-              {/* 基本信息 */}
-              <div className="bg-gray-50 rounded-xl p-4 space-y-4">
-                <h4 className="text-sm font-semibold text-gray-700">基本信息</h4>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-2">名称</label>
-                    <input
-                      type="text"
-                      value={currentConfig.agentConfig.name}
-                      onChange={(e) => updateAgentConfig({ name: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-600 mb-2">角色</label>
-                    <input
-                      type="text"
-                      value={currentConfig.agentConfig.role}
-                      onChange={(e) => updateAgentConfig({ role: e.target.value })}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    />
-                  </div>
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">智能学伴配置</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setIsAdvancedMode(false);
+                      updateAgentConfig({ isAdvancedMode: false });
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      !isAdvancedMode
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    基础配置
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsAdvancedMode(true);
+                      updateAgentConfig({ isAdvancedMode: true });
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                      isAdvancedMode
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    高级模式
+                  </button>
                 </div>
               </div>
 
-              {/* 指导策略 */}
-              <div className="bg-gray-50 rounded-xl p-4 space-y-4">
-                <h4 className="text-sm font-semibold text-gray-700">指导策略</h4>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">指导方式</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['direct', 'scaffolding', 'inquiry'] as GuidanceStyle[]).map(style => {
-                      const styleInfo = getGuidanceStyleLabel(style);
-                      return (
-                        <button
-                          key={style}
-                          onClick={() => updateAgentConfig({ guidanceStyle: style })}
-                          className={`p-3 rounded-lg border-2 text-left transition-all ${
-                            currentConfig.agentConfig.guidanceStyle === style
-                              ? 'border-teal-500 bg-teal-50'
-                              : 'border-gray-200 hover:border-gray-300'
-                          }`}
+              {!isAdvancedMode ? (
+                // 基础配置模式
+                <>
+                  {/* 基本信息 */}
+                  <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-700">基本信息</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-2">名称</label>
+                        <input
+                          type="text"
+                          value={currentConfig.agentConfig.name}
+                          onChange={(e) => updateAgentConfig({ name: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-gray-600 mb-2">角色</label>
+                        <input
+                          type="text"
+                          value={currentConfig.agentConfig.role}
+                          onChange={(e) => updateAgentConfig({ role: e.target.value })}
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 指导策略 */}
+                  <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+                    <h4 className="text-sm font-semibold text-gray-700">指导策略</h4>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">指导方式</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['direct', 'scaffolding', 'inquiry'] as GuidanceStyle[]).map(style => {
+                          const styleInfo = getGuidanceStyleLabel(style);
+                          return (
+                            <button
+                              key={style}
+                              onClick={() => updateAgentConfig({ guidanceStyle: style })}
+                              className={`p-3 rounded-lg border-2 text-left transition-all ${
+                                currentConfig.agentConfig.guidanceStyle === style
+                                  ? 'border-teal-500 bg-teal-50'
+                                  : 'border-gray-200 hover:border-gray-300'
+                              }`}
+                            >
+                              <div className="text-sm font-medium text-gray-900">{styleInfo.label}</div>
+                              <div className="text-xs text-gray-500 mt-1">{styleInfo.desc}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">对话风格</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['formal', 'friendly', 'inspiring'] as ConversationStyle[]).map(style => (
+                          <button
+                            key={style}
+                            onClick={() => updateAgentConfig({ conversationStyle: style })}
+                            className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                              currentConfig.agentConfig.conversationStyle === style
+                                ? 'border-teal-500 bg-teal-50 text-teal-700'
+                                : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            {getConversationStyleLabel(style)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">鼓励方式</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['minimal', 'balanced', 'enthusiastic'] as AgentEncouragementStyle[]).map(style => (
+                          <button
+                            key={style}
+                            onClick={() => updateAgentConfig({ encouragementStyle: style })}
+                            className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                              currentConfig.agentConfig.encouragementStyle === style
+                                ? 'border-teal-500 bg-teal-50 text-teal-700'
+                                : 'border-gray-200 text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            {getEncouragementStyleLabel(style)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">最大对话轮次</label>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="range"
+                          min={3}
+                          max={15}
+                          value={currentConfig.agentConfig.maxRounds}
+                          onChange={(e) => updateAgentConfig({ maxRounds: parseInt(e.target.value) })}
+                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                        />
+                        <span className="w-12 text-center text-sm font-medium text-teal-600 bg-teal-50 px-2 py-1 rounded-lg">
+                          {currentConfig.agentConfig.maxRounds} 轮
+                        </span>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-600 mb-2">特别关注（可选）</label>
+                      <textarea
+                        value={currentConfig.agentConfig.specialFocus || ''}
+                        onChange={(e) => updateAgentConfig({ specialFocus: e.target.value })}
+                        placeholder="例如：重点关注学生对「力的作用效果」的理解，注意区分力的两种效果"
+                        rows={2}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                // 高级模式
+                <div className="space-y-6">
+                  {/* 自定义提示词 */}
+                  <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                      <span className="text-sm font-semibold text-gray-900">自定义提示词</span>
+                      <button
+                        onClick={() => setIsPromptExpanded(!isPromptExpanded)}
+                        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                      >
+                        {isPromptExpanded ? '收起' : '展开'}
+                        <svg
+                          className={`w-4 h-4 transition-transform ${isPromptExpanded ? 'rotate-180' : ''}`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
                         >
-                          <div className="text-sm font-medium text-gray-900">{styleInfo.label}</div>
-                          <div className="text-xs text-gray-500 mt-1">{styleInfo.desc}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">对话风格</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['formal', 'friendly', 'inspiring'] as ConversationStyle[]).map(style => (
-                      <button
-                        key={style}
-                        onClick={() => updateAgentConfig({ conversationStyle: style })}
-                        className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                          currentConfig.agentConfig.conversationStyle === style
-                            ? 'border-teal-500 bg-teal-50 text-teal-700'
-                            : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        {getConversationStyleLabel(style)}
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
                       </button>
-                    ))}
+                    </div>
+                    {isPromptExpanded && (
+                      <div className="p-4">
+                        <textarea
+                          value={currentConfig.agentConfig.advancedPrompt || getDefaultAdvancedPrompt()}
+                          onChange={(e) => updateAgentConfig({ advancedPrompt: e.target.value })}
+                          placeholder="输入自定义提示词..."
+                          rows={20}
+                          className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
+                        />
+                        <div className="mt-3 flex items-center justify-between">
+                          <p className="text-xs text-gray-500">
+                            提示：在高级模式下，您可以完全自定义智能学伴的行为和对话策略
+                          </p>
+                          <button
+                            onClick={() => updateAgentConfig({ advancedPrompt: getDefaultAdvancedPrompt() })}
+                            className="text-xs text-teal-600 hover:text-teal-700 font-medium"
+                          >
+                            重置为默认
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 高级设置提示 */}
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                    <div className="flex items-start gap-3">
+                      <svg className="w-5 h-5 text-amber-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <div>
+                        <h4 className="text-sm font-semibold text-amber-800">高级模式说明</h4>
+                        <p className="text-xs text-amber-700 mt-1">
+                          高级模式允许您完全自定义智能学伴的提示词。基础配置中的设置将被忽略，系统将直接使用您编写的提示词。
+                          请确保提示词包含必要的角色设定、对话策略和评价标准。
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">鼓励方式</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['minimal', 'balanced', 'enthusiastic'] as AgentEncouragementStyle[]).map(style => (
-                      <button
-                        key={style}
-                        onClick={() => updateAgentConfig({ encouragementStyle: style })}
-                        className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
-                          currentConfig.agentConfig.encouragementStyle === style
-                            ? 'border-teal-500 bg-teal-50 text-teal-700'
-                            : 'border-gray-200 text-gray-700 hover:border-gray-300'
-                        }`}
-                      >
-                        {getEncouragementStyleLabel(style)}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">最大对话轮次</label>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min={3}
-                      max={15}
-                      value={currentConfig.agentConfig.maxRounds}
-                      onChange={(e) => updateAgentConfig({ maxRounds: parseInt(e.target.value) })}
-                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500"
-                    />
-                    <span className="w-12 text-center text-sm font-medium text-teal-600 bg-teal-50 px-2 py-1 rounded-lg">
-                      {currentConfig.agentConfig.maxRounds} 轮
-                    </span>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-600 mb-2">特别关注（可选）</label>
-                  <textarea
-                    value={currentConfig.agentConfig.specialFocus || ''}
-                    onChange={(e) => updateAgentConfig({ specialFocus: e.target.value })}
-                    placeholder="例如：重点关注学生对「力的作用效果」的理解，注意区分力的两种效果"
-                    rows={2}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-                  />
-                </div>
-              </div>
+              )}
             </div>
           )}
         </div>

@@ -1,10 +1,156 @@
 'use client';
 
+import { useState } from 'react';
 import { useEditor } from '@/store/EditorContext';
 import { ChevronLeftIcon, PlusIcon, TrashIcon, GripVerticalIcon } from '@/components/icons';
+import { CoursePage } from '@/types';
 
 export default function RightPanel() {
-  const { editorState, courseData, dispatchEditor } = useEditor();
+  const { editorState, courseData, dispatchEditor, dispatchCourse } = useEditor();
+  const [draggedPageId, setDraggedPageId] = useState<string | null>(null);
+  const [dragOverPageId, setDragOverPageId] = useState<string | null>(null);
+
+  // 获取页面的显示编号（根据类型和配置组）
+  const getPageDisplayNumber = (page: CoursePage): string => {
+    if (page.type === 'diagnosis') {
+      const groupIndex = page.diagnosisData?.groupIndex;
+      return groupIndex ? `${groupIndex}` : '';
+    } else if (page.type === 'conversation-diagnosis') {
+      const groupIndex = page.conversationDiagnosisData?.configGroupId ?
+        courseData.pages.find(p => p.diagnosisData?.configGroupId === page.conversationDiagnosisData?.configGroupId)?.diagnosisData?.groupIndex :
+        undefined;
+      return groupIndex ? `${groupIndex}` : '';
+    } else if (page.type === 'tiered-teaching') {
+      const groupIndex = page.tieredTeachingData?.groupIndex;
+      return groupIndex ? `${groupIndex}` : '';
+    }
+    return '';
+  };
+
+  // 处理拖拽开始
+  const handleDragStart = (e: React.DragEvent, pageId: string) => {
+    setDraggedPageId(pageId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  // 处理拖拽结束
+  const handleDragEnd = () => {
+    setDraggedPageId(null);
+    setDragOverPageId(null);
+  };
+
+  // 处理拖拽悬停
+  const handleDragOver = (e: React.DragEvent, pageId: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverPageId(pageId);
+  };
+
+  // 处理拖拽离开
+  const handleDragLeave = () => {
+    setDragOverPageId(null);
+  };
+
+  // 验证拖拽是否有效
+  const isValidDragDrop = (draggedPage: CoursePage, targetPage: CoursePage, targetIndex: number): { valid: boolean; message?: string } => {
+    // 获取拖拽页面和目标页面的配置组ID
+    const draggedGroupId = draggedPage.configGroupId ||
+                          draggedPage.diagnosisData?.configGroupId ||
+                          draggedPage.conversationDiagnosisData?.configGroupId ||
+                          draggedPage.tieredTeachingData?.configGroupId;
+
+    const targetGroupId = targetPage.configGroupId ||
+                         targetPage.diagnosisData?.configGroupId ||
+                         targetPage.conversationDiagnosisData?.configGroupId ||
+                         targetPage.tieredTeachingData?.configGroupId;
+
+    // 如果拖拽的是分层教学页面，不能放在诊断页面之前
+    if (draggedPage.type === 'tiered-teaching' && draggedGroupId) {
+      const diagnosisPage = courseData.pages.find(p =>
+        p.type === 'diagnosis' &&
+        (p.diagnosisData?.configGroupId === draggedGroupId)
+      );
+
+      if (diagnosisPage) {
+        const diagnosisIndex = courseData.pages.indexOf(diagnosisPage);
+        if (targetIndex <= diagnosisIndex) {
+          return {
+            valid: false,
+            message: '学生须完成"认知起点诊断"才能进入"分层教学"'
+          };
+        }
+      }
+    }
+
+    // 不同配置组的页面不能穿插
+    if (draggedGroupId && targetGroupId && draggedGroupId !== targetGroupId) {
+      // 检查是否会导致配置组穿插
+      const draggedGroupPages = courseData.pages.filter(p => {
+        const gId = p.configGroupId || p.diagnosisData?.configGroupId ||
+                   p.conversationDiagnosisData?.configGroupId || p.tieredTeachingData?.configGroupId;
+        return gId === draggedGroupId;
+      });
+
+      const targetGroupPages = courseData.pages.filter(p => {
+        const gId = p.configGroupId || p.diagnosisData?.configGroupId ||
+                   p.conversationDiagnosisData?.configGroupId || p.tieredTeachingData?.configGroupId;
+        return gId === targetGroupId;
+      });
+
+      // 简单检查：如果两个组都有多个页面，不允许穿插
+      if (draggedGroupPages.length > 1 && targetGroupPages.length > 1) {
+        return {
+          valid: false,
+          message: '不同的"因材施教"设置不能穿插'
+        };
+      }
+    }
+
+    return { valid: true };
+  };
+
+  // 处理拖拽放下
+  const handleDrop = (e: React.DragEvent, targetPageId: string) => {
+    e.preventDefault();
+
+    if (!draggedPageId || draggedPageId === targetPageId) {
+      handleDragEnd();
+      return;
+    }
+
+    const draggedPage = courseData.pages.find(p => p.id === draggedPageId);
+    const targetPage = courseData.pages.find(p => p.id === targetPageId);
+
+    if (!draggedPage || !targetPage) {
+      handleDragEnd();
+      return;
+    }
+
+    const targetIndex = courseData.pages.indexOf(targetPage);
+    const validation = isValidDragDrop(draggedPage, targetPage, targetIndex);
+
+    if (!validation.valid) {
+      alert(validation.message);
+      handleDragEnd();
+      return;
+    }
+
+    // 重新排序页面
+    const newPages = courseData.pages.filter(p => p.id !== draggedPageId);
+    const draggedIndex = courseData.pages.indexOf(draggedPage);
+    const insertIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+
+    newPages.splice(insertIndex, 0, draggedPage);
+
+    // 更新order属性
+    const reorderedPages = newPages.map((page, index) => ({
+      ...page,
+      order: index
+    }));
+
+    dispatchCourse({ type: 'REORDER_PAGES', payload: reorderedPages });
+    handleDragEnd();
+  };
 
   return (
     <div
@@ -81,13 +227,25 @@ export default function RightPanel() {
                       {group.pages.map((page, index) => (
                         <div
                           key={page.id}
-                          className="bg-white border border-gray-200 rounded-lg px-2.5 py-2 flex items-center justify-between gap-2 cursor-grab transition-all hover:border-orange-500 hover:shadow-sm"
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, page.id)}
+                          onDragEnd={handleDragEnd}
+                          onDragOver={(e) => handleDragOver(e, page.id)}
+                          onDragLeave={handleDragLeave}
+                          onDrop={(e) => handleDrop(e, page.id)}
+                          onClick={() => dispatchEditor({ type: 'SELECT_PAGE', payload: page.id })}
+                          className={`bg-white border rounded-lg px-2.5 py-2 flex items-center justify-between gap-2 cursor-grab transition-all hover:border-orange-500 hover:shadow-sm ${
+                            draggedPageId === page.id ? 'opacity-50 border-orange-500' : 'border-gray-200'
+                          } ${
+                            dragOverPageId === page.id ? 'border-orange-500 bg-orange-50' : ''
+                          }`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
+                            <GripVerticalIcon className="w-4 h-4 text-gray-400 flex-shrink-0" />
                             <span className="w-5 h-5 rounded-md bg-orange-50 text-orange-600 inline-flex items-center justify-center text-xs font-bold flex-shrink-0">
-                              {index + 1}
+                              {getPageDisplayNumber(page) || index + 1}
                             </span>
-                            <span className="text-sm text-gray-900 font-semibold whitespace-nowrap overflow-hidden text-ellipsis max-w-[140px]">
+                            <span className="text-sm text-gray-900 font-semibold whitespace-nowrap overflow-hidden text-ellipsis max-w-[120px]">
                               {page.title}
                             </span>
                           </div>

@@ -95,6 +95,7 @@ export default function LeftSidebar({
       ))}
       {/* 其他面板：正常条件渲染 */}
       {!editorState.isPanelCollapsed &&
+        editorState.activePanel &&
         !persistentPanels.includes(editorState.activePanel) &&
         renderPanelContent(editorState.activePanel)}
     </div>

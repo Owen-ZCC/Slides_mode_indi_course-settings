@@ -114,7 +114,7 @@ export type EditorMode = 'initial' | 'edit' | 'tool';
 
 // 编辑器状态
 export interface EditorState {
-  activePanel: PanelType;
+  activePanel: PanelType | null;
   isPanelCollapsed: boolean;
   isRightPanelCollapsed: boolean;
   selectedElement: string | null;
@@ -140,6 +140,7 @@ export interface StudentLevel {
   minScore: number;
   maxScore: number;
   colorClass: string;
+  description?: string; // 分层描述（选填）
 }
 
 export interface TestDiagnosisConfig {
@@ -239,11 +240,19 @@ export interface DifferentiatedTeachingState {
 }
 
 // 分层教学相关类型
+export interface TaskEvaluationCriteria {
+  id: string;
+  name: string;
+  description: string;
+  weight: number;
+}
+
 export interface LearningTask {
   id: string;
   title: string;
   description: string;
   resources?: string[];
+  evaluationCriteria: TaskEvaluationCriteria[]; // 任务评价标准
 }
 
 export interface EvaluationCriteria {
@@ -277,6 +286,7 @@ export interface TieredAgentConfig {
   maxRounds: number;
   specialFocus?: string;
   advancedPrompt?: string;
+  isAdvancedMode?: boolean;
 }
 
 export interface TieredLevelConfig {
@@ -285,7 +295,6 @@ export interface TieredLevelConfig {
   levelIcon: string;
   levelColor: string;
   learningTasks: LearningTask[];
-  evaluationCriteria: EvaluationCriteria[];
   performanceLevels: LearningPerformanceLevel[];
   agentConfig: TieredAgentConfig;
 }

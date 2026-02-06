@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { KnowledgePoint, StudentLevel, DiagnosisQuestion, CoursePage, DiagnosisConfig, ConversationDiagnosisConfig, TieredTeachingPageData, TieredLevelConfig, LearningTask, EvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig } from '@/types';
+import { KnowledgePoint, StudentLevel, DiagnosisQuestion, CoursePage, DiagnosisConfig, ConversationDiagnosisConfig, TieredTeachingPageData, TieredLevelConfig, LearningTask, TaskEvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, TieredTeachingPageData as TieredData } from '@/types';
 import { useEditor } from '@/store/EditorContext';
 import { ChevronLeftIcon } from '@/components/icons';
 
@@ -49,6 +49,15 @@ export default function DifferentiatedPanel() {
     { id: '3', name: '力的三要素' },
   ]);
   const [boundTieredPageId, setBoundTieredPageId] = useState<string | null>(null);
+
+  // 学习表现等级管理
+  const [performanceLevels, setPerformanceLevels] = useState<LearningPerformanceLevel[]>([
+    { id: 'perf-1', name: '卓越表现', icon: '🏆', color: 'emerald', minScore: 90, maxScore: 100, description: '全面完成学习任务，表现突出，能够举一反三' },
+    { id: 'perf-2', name: '良好表现', icon: '⭐', color: 'blue', minScore: 75, maxScore: 89, description: '较好完成学习任务，理解深入，有一定创新' },
+    { id: 'perf-3', name: '基本达标', icon: '📈', color: 'amber', minScore: 60, maxScore: 74, description: '基本完成学习任务，掌握核心内容' },
+    { id: 'perf-4', name: '需要加强', icon: '💪', color: 'rose', minScore: 0, maxScore: 59, description: '学习任务完成度不足，需要额外辅导' },
+  ]);
+  const [editingPerformanceLevelId, setEditingPerformanceLevelId] = useState<string | null>(null);
 
   // 生成新的配置组ID
   const generateConfigGroupId = () => `config-group-${Date.now()}`;
@@ -279,9 +288,57 @@ export default function DifferentiatedPanel() {
         setShowStepPages(true);
         setCurrentStep(1);
       }
+    }
+    // 如果选中的是分层教学页面
+    else if (selectedPage?.type === 'tiered-teaching') {
+      const configGroupId = selectedPage.tieredTeachingData?.configGroupId;
+      if (!configGroupId) {
+        setBoundPageId(null);
+        return;
+      }
+
+      // 找到对应的试题诊断页面
+      const diagnosisPage = courseData.pages.find(
+        p => p.type === 'diagnosis' && p.diagnosisData?.configGroupId === configGroupId
+      );
+
+      if (diagnosisPage?.diagnosisData?.config) {
+        // 自动切换到因材施教面板
+        if (editorState.activePanel !== 'differentiated') {
+          dispatchEditor({ type: 'SET_ACTIVE_PANEL', payload: 'differentiated' });
+        }
+
+        // 加载配置
+        const config = diagnosisPage.diagnosisData.config;
+        setKnowledgePoints(config.knowledgePoints);
+        setStudentLevels(config.studentLevels);
+        setSelectedDifficulties(config.selectedDifficulties);
+        setQuestionCounts(config.questionCounts);
+
+        // 检查该配置组是否有对话诊断页面（非隐藏）
+        const hasConversationPage = courseData.pages.some(
+          p => p.type === 'conversation-diagnosis' &&
+          p.conversationDiagnosisData?.configGroupId === configGroupId &&
+          !p.hidden
+        );
+        setConversationEnabled(hasConversationPage);
+
+        // 加载分层教学的课时知识点
+        if (selectedPage.tieredTeachingData?.lessonKnowledgePoints) {
+          setTieredKnowledgePoints(selectedPage.tieredTeachingData.lessonKnowledgePoints);
+        }
+
+        setBoundPageId(diagnosisPage.id);
+        setBoundTieredPageId(selectedPage.id);
+        setShowStepPages(true);
+        setCurrentStep(2); // 直接跳转到分层教学步骤
+      }
     } else {
-      // 如果选中的不是诊断页面，清除绑定
+      // 如果选中的不是因材施教相关页面，清除绑定并重置状态
       setBoundPageId(null);
+      setBoundTieredPageId(null);
+      setShowStepPages(false);
+      setCurrentStep(1); // 重置到认知起点诊断步骤
     }
   }, [editorState.selectedPage, courseData.pages]);
 
@@ -376,6 +433,32 @@ export default function DifferentiatedPanel() {
   // 更新等级
   const handleUpdateLevel = (id: string, updates: Partial<StudentLevel>) => {
     setStudentLevels(studentLevels.map(level =>
+      level.id === id ? { ...level, ...updates } : level
+    ));
+  };
+
+  // 学习表现等级 - 添加
+  const handleAddPerformanceLevel = () => {
+    const newLevel: LearningPerformanceLevel = {
+      id: `perf-${Date.now()}`,
+      name: '新等级',
+      icon: '⭐',
+      color: 'gray',
+      minScore: 0,
+      maxScore: 100,
+      description: '',
+    };
+    setPerformanceLevels([...performanceLevels, newLevel]);
+  };
+
+  // 学习表现等级 - 删除
+  const handleDeletePerformanceLevel = (id: string) => {
+    setPerformanceLevels(performanceLevels.filter(level => level.id !== id));
+  };
+
+  // 学习表现等级 - 更新
+  const handleUpdatePerformanceLevel = (id: string, updates: Partial<LearningPerformanceLevel>) => {
+    setPerformanceLevels(performanceLevels.map(level =>
       level.id === id ? { ...level, ...updates } : level
     ));
   };
@@ -594,58 +677,127 @@ export default function DifferentiatedPanel() {
     }
   };
 
-  // 默认学习任务（按等级）
+  // 默认学习任务（按等级，每个任务包含评价标准）
   const getDefaultLearningTasks = (levelId: string): LearningTask[] => {
     const tasks: Record<string, LearningTask[]> = {
       '1': [ // 融会贯通
-        { id: 'task-1-1', title: '挑战进阶：力的综合应用', description: '综合运用力的三要素分析复杂情境，尝试解决生活中的力学问题' },
-        { id: 'task-1-2', title: '拓展探究：力的相互作用', description: '探究牛顿第三定律的应用，分析相互作用力的特点' },
-        { id: 'task-1-3', title: '创意实践：设计力学小实验', description: '设计一个展示力的作用效果的创意实验，并记录观察结果' }
+        {
+          id: 'task-1-1',
+          title: '挑战进阶：力的综合应用',
+          description: '综合运用力的三要素分析复杂情境，尝试解决生活中的力学问题',
+          evaluationCriteria: [
+            { id: 'eval-1-1-1', name: '综合应用能力', description: '能够灵活运用力的概念解决复杂问题', weight: 50 },
+            { id: 'eval-1-1-2', name: '分析深度', description: '能从多角度分析问题，考虑各种因素', weight: 50 }
+          ]
+        },
+        {
+          id: 'task-1-2',
+          title: '拓展探究：力的相互作用',
+          description: '探究牛顿第三定律的应用，分析相互作用力的特点',
+          evaluationCriteria: [
+            { id: 'eval-1-2-1', name: '探究能力', description: '能主动探索超出课本的知识内容', weight: 50 },
+            { id: 'eval-1-2-2', name: '理论联系', description: '能将理论与实际现象联系起来', weight: 50 }
+          ]
+        },
+        {
+          id: 'task-1-3',
+          title: '创意实践：设计力学小实验',
+          description: '设计一个展示力的作用效果的创意实验，并记录观察结果',
+          evaluationCriteria: [
+            { id: 'eval-1-3-1', name: '创新思维', description: '能提出有创意的解决方案或实验设计', weight: 50 },
+            { id: 'eval-1-3-2', name: '实验记录', description: '能准确记录实验过程和结果', weight: 50 }
+          ]
+        }
       ],
       '2': [ // 掌握良好
-        { id: 'task-2-1', title: '巩固强化：力的三要素', description: '通过练习题巩固力的大小、方向、作用点的理解' },
-        { id: 'task-2-2', title: '概念深化：力的作用效果', description: '区分力使物体形变和改变运动状态这两种效果' },
-        { id: 'task-2-3', title: '实验观察：弹簧测力计的使用', description: '学习正确使用弹簧测力计测量力的大小' }
+        {
+          id: 'task-2-1',
+          title: '巩固强化：力的三要素',
+          description: '通过练习题巩固力的大小、方向、作用点的理解',
+          evaluationCriteria: [
+            { id: 'eval-2-1-1', name: '概念理解', description: '准确理解力的三要素及其作用效果', weight: 50 },
+            { id: 'eval-2-1-2', name: '答题准确性', description: '能正确解答相关练习题', weight: 50 }
+          ]
+        },
+        {
+          id: 'task-2-2',
+          title: '概念深化：力的作用效果',
+          description: '区分力使物体形变和改变运动状态这两种效果',
+          evaluationCriteria: [
+            { id: 'eval-2-2-1', name: '问题解决', description: '能运用所学知识解决标准问题', weight: 50 },
+            { id: 'eval-2-2-2', name: '概念区分', description: '能清晰区分不同的力的作用效果', weight: 50 }
+          ]
+        },
+        {
+          id: 'task-2-3',
+          title: '实验观察：弹簧测力计的使用',
+          description: '学习正确使用弹簧测力计测量力的大小',
+          evaluationCriteria: [
+            { id: 'eval-2-3-1', name: '实验技能', description: '能正确使用测量工具和记录数据', weight: 50 },
+            { id: 'eval-2-3-2', name: '操作规范', description: '实验操作步骤规范正确', weight: 50 }
+          ]
+        }
       ],
       '3': [ // 有待提升
-        { id: 'task-3-1', title: '基础回顾：什么是力', description: '复习力的定义，理解力是物体对物体的作用' },
-        { id: 'task-3-2', title: '逐步掌握：力的三要素', description: '通过图示和实例理解力的三要素' },
-        { id: 'task-3-3', title: '动手体验：感受力的作用', description: '通过简单实验感受力可以改变物体的形状和运动状态' }
+        {
+          id: 'task-3-1',
+          title: '基础回顾：什么是力',
+          description: '复习力的定义，理解力是物体对物体的作用',
+          evaluationCriteria: [
+            { id: 'eval-3-1-1', name: '基础掌握', description: '理解力的基本定义和三要素', weight: 50 },
+            { id: 'eval-3-1-2', name: '概念表述', description: '能用自己的话解释什么是力', weight: 50 }
+          ]
+        },
+        {
+          id: 'task-3-2',
+          title: '逐步掌握：力的三要素',
+          description: '通过图示和实例理解力的三要素',
+          evaluationCriteria: [
+            { id: 'eval-3-2-1', name: '知识应用', description: '能在简单情境中识别和分析力', weight: 50 },
+            { id: 'eval-3-2-2', name: '图示理解', description: '能看懂力的示意图', weight: 50 }
+          ]
+        },
+        {
+          id: 'task-3-3',
+          title: '动手体验：感受力的作用',
+          description: '通过简单实验感受力可以改变物体的形状和运动状态',
+          evaluationCriteria: [
+            { id: 'eval-3-3-1', name: '学习态度', description: '积极参与学习活动，认真完成任务', weight: 50 },
+            { id: 'eval-3-3-2', name: '体验感悟', description: '能描述实验中的感受和发现', weight: 50 }
+          ]
+        }
       ],
       '4': [ // 基础薄弱
-        { id: 'task-4-1', title: '启蒙引导：认识力', description: '通过生活实例认识什么是力，建立初步概念' },
-        { id: 'task-4-2', title: '基础夯实：力的基本概念', description: '理解力必须有施力物体和受力物体' },
-        { id: 'task-4-3', title: '循序渐进：力的作用是相互的', description: '通过互推、拍手等活动体验力的相互性' }
+        {
+          id: 'task-4-1',
+          title: '启蒙引导：认识力',
+          description: '通过生活实例认识什么是力，建立初步概念',
+          evaluationCriteria: [
+            { id: 'eval-4-1-1', name: '概念建立', description: '建立对力的初步认识', weight: 50 },
+            { id: 'eval-4-1-2', name: '生活联系', description: '能举出生活中力的例子', weight: 50 }
+          ]
+        },
+        {
+          id: 'task-4-2',
+          title: '基础夯实：力的基本概念',
+          description: '理解力必须有施力物体和受力物体',
+          evaluationCriteria: [
+            { id: 'eval-4-2-1', name: '学习进步', description: '相比学习前有明显进步', weight: 50 },
+            { id: 'eval-4-2-2', name: '概念识别', description: '能识别施力物体和受力物体', weight: 50 }
+          ]
+        },
+        {
+          id: 'task-4-3',
+          title: '循序渐进：力的作用是相互的',
+          description: '通过互推、拍手等活动体验力的相互性',
+          evaluationCriteria: [
+            { id: 'eval-4-3-1', name: '参与度', description: '积极参与学习活动，愿意尝试', weight: 50 },
+            { id: 'eval-4-3-2', name: '体验理解', description: '能通过活动理解力的相互性', weight: 50 }
+          ]
+        }
       ]
     };
     return tasks[levelId] || tasks['2'];
-  };
-
-  // 默认评价标准（按等级）
-  const getDefaultEvaluationCriteria = (levelId: string): EvaluationCriteria[] => {
-    const criteria: Record<string, EvaluationCriteria[]> = {
-      '1': [
-        { id: 'eval-1-1', name: '综合应用能力', description: '能够灵活运用力的概念解决复杂问题', weight: 40 },
-        { id: 'eval-1-2', name: '创新思维', description: '能提出有创意的解决方案或实验设计', weight: 30 },
-        { id: 'eval-1-3', name: '拓展探究', description: '能主动探索超出课本的知识内容', weight: 30 }
-      ],
-      '2': [
-        { id: 'eval-2-1', name: '概念理解', description: '准确理解力的三要素及其作用效果', weight: 40 },
-        { id: 'eval-2-2', name: '问题解决', description: '能运用所学知识解决标准问题', weight: 35 },
-        { id: 'eval-2-3', name: '实验技能', description: '能正确使用测量工具和记录数据', weight: 25 }
-      ],
-      '3': [
-        { id: 'eval-3-1', name: '基础掌握', description: '理解力的基本定义和三要素', weight: 50 },
-        { id: 'eval-3-2', name: '知识应用', description: '能在简单情境中识别和分析力', weight: 30 },
-        { id: 'eval-3-3', name: '学习态度', description: '积极参与学习活动，认真完成任务', weight: 20 }
-      ],
-      '4': [
-        { id: 'eval-4-1', name: '概念建立', description: '建立对力的初步认识', weight: 40 },
-        { id: 'eval-4-2', name: '学习进步', description: '相比学习前有明显进步', weight: 35 },
-        { id: 'eval-4-3', name: '参与度', description: '积极参与学习活动，愿意尝试', weight: 25 }
-      ]
-    };
-    return criteria[levelId] || criteria['2'];
   };
 
   // 默认学习表现等级
@@ -732,8 +884,7 @@ export default function DifferentiatedPanel() {
       levelIcon: level.icon,
       levelColor: level.colorClass,
       learningTasks: getDefaultLearningTasks(level.id),
-      evaluationCriteria: getDefaultEvaluationCriteria(level.id),
-      performanceLevels: getDefaultPerformanceLevels(),
+      performanceLevels: [...performanceLevels],
       agentConfig: getDefaultAgentConfig(level.id, level.name),
     }));
 
@@ -945,7 +1096,7 @@ export default function DifferentiatedPanel() {
                               className="flex-1 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                             />
                           </div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 mb-2">
                             <input
                               type="number"
                               value={level.minScore}
@@ -979,6 +1130,15 @@ export default function DifferentiatedPanel() {
                               </svg>
                             </button>
                           </div>
+                          <textarea
+                            value={level.description || ''}
+                            onChange={(e) => handleUpdateLevel(level.id, { description: e.target.value })}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={() => setEditingLevelId(level.id)}
+                            placeholder="分层描述（选填）"
+                            rows={2}
+                            className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
+                          />
                         </div>
                       );
                     })}
@@ -1193,7 +1353,105 @@ export default function DifferentiatedPanel() {
                   )}
                 </div>
 
-                {/* 3. 生成分层教学页面按钮 */}
+                {/* 3. 学习表现等级（可编辑） */}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-start gap-2 mb-3">
+                    <span className="text-xl">🏅</span>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-gray-900">学习表现等级</div>
+                      <div className="text-xs text-gray-500">配置学习任务完成后的评价等级</div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {performanceLevels.map((level) => {
+                      const isEditing = editingPerformanceLevelId === level.id;
+                      const colorMap: Record<string, string> = {
+                        emerald: 'bg-emerald-50 border-emerald-300',
+                        blue: 'bg-blue-50 border-blue-300',
+                        amber: 'bg-amber-50 border-amber-300',
+                        rose: 'bg-rose-50 border-rose-300',
+                        gray: 'bg-gray-50 border-gray-300',
+                      };
+                      const colorClass = colorMap[level.color] || colorMap.gray;
+                      return (
+                        <div
+                          key={level.id}
+                          className={`rounded-lg p-3 transition-all cursor-pointer border ${
+                            isEditing
+                              ? `${colorClass} shadow-sm`
+                              : 'border-gray-200 hover:bg-gray-100'
+                          }`}
+                          onClick={() => setEditingPerformanceLevelId(level.id)}
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-lg">{level.icon}</span>
+                            <input
+                              type="text"
+                              value={level.name}
+                              onChange={(e) => handleUpdatePerformanceLevel(level.id, { name: e.target.value })}
+                              onFocus={() => setEditingPerformanceLevelId(level.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex-1 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs text-gray-600">最低分:</span>
+                            <input
+                              type="number"
+                              value={level.minScore}
+                              onChange={(e) => handleUpdatePerformanceLevel(level.id, { minScore: parseInt(e.target.value) || 0 })}
+                              onFocus={() => setEditingPerformanceLevelId(level.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              min="0"
+                              max="100"
+                              className="w-14 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            />
+                            <span className="text-xs text-gray-600">最高分:</span>
+                            <input
+                              type="number"
+                              value={level.maxScore}
+                              onChange={(e) => handleUpdatePerformanceLevel(level.id, { maxScore: parseInt(e.target.value) || 0 })}
+                              onFocus={() => setEditingPerformanceLevelId(level.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              min="0"
+                              max="100"
+                              className="w-14 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeletePerformanceLevel(level.id);
+                              }}
+                              className="ml-auto p-1 rounded hover:bg-gray-200 transition-colors"
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="18" y1="6" x2="6" y2="18"/>
+                                <line x1="6" y1="6" x2="18" y2="18"/>
+                              </svg>
+                            </button>
+                          </div>
+                          <textarea
+                            value={level.description || ''}
+                            onChange={(e) => handleUpdatePerformanceLevel(level.id, { description: e.target.value })}
+                            onClick={(e) => e.stopPropagation()}
+                            onFocus={() => setEditingPerformanceLevelId(level.id)}
+                            placeholder="等级描述（选填）"
+                            rows={2}
+                            className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button
+                    onClick={handleAddPerformanceLevel}
+                    className="mt-3 text-sm text-teal-600 font-medium hover:text-teal-700"
+                  >
+                    + 添加等级
+                  </button>
+                </div>
+
+                {/* 4. 生成分层教学页面按钮 */}
                 <div className="bg-gray-50 rounded-xl p-4">
                   <div className="flex items-start gap-2 mb-3">
                     <span className="text-xl">📚</span>

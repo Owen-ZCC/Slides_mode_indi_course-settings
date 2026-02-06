@@ -36,6 +36,7 @@ const initialCourseData: CourseData = {
 // Action 类型
 type EditorAction =
   | { type: 'SET_ACTIVE_PANEL'; payload: PanelType }
+  | { type: 'CLEAR_ACTIVE_PANEL' }
   | { type: 'TOGGLE_PANEL_COLLAPSE' }
   | { type: 'TOGGLE_RIGHT_PANEL' }
   | { type: 'SELECT_ELEMENT'; payload: string | null }
@@ -67,6 +68,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
   switch (action.type) {
     case 'SET_ACTIVE_PANEL':
       return { ...state, activePanel: action.payload, isPanelCollapsed: false };
+    case 'CLEAR_ACTIVE_PANEL':
+      return { ...state, activePanel: null, isPanelCollapsed: true };
     case 'TOGGLE_PANEL_COLLAPSE':
       return { ...state, isPanelCollapsed: !state.isPanelCollapsed };
     case 'TOGGLE_RIGHT_PANEL':
@@ -96,13 +99,18 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 function validatePageOrder(pages: CoursePage[]): { valid: boolean; message?: string } {
   const visiblePages = pages.filter(p => !p.hidden);
 
+  // 获取页面的配置组ID
+  const getPageConfigGroupId = (page: CoursePage): string | undefined => {
+    return page.configGroupId ||
+           page.diagnosisData?.configGroupId ||
+           page.conversationDiagnosisData?.configGroupId ||
+           page.tieredTeachingData?.configGroupId;
+  };
+
   // 按配置组分组
   const configGroups = new Map<string, CoursePage[]>();
   visiblePages.forEach(page => {
-    const groupId = page.configGroupId ||
-                    page.diagnosisData?.configGroupId ||
-                    page.conversationDiagnosisData?.configGroupId ||
-                    page.tieredTeachingData?.configGroupId;
+    const groupId = getPageConfigGroupId(page);
     if (groupId) {
       if (!configGroups.has(groupId)) {
         configGroups.set(groupId, []);
@@ -112,7 +120,7 @@ function validatePageOrder(pages: CoursePage[]): { valid: boolean; message?: str
   });
 
   // 验证每个配置组内的顺序
-  for (const [, groupPages] of configGroups) {
+  for (const [groupId, groupPages] of configGroups) {
     const diagnosisPage = groupPages.find(p => p.type === 'diagnosis');
     const conversationPage = groupPages.find(p => p.type === 'conversation-diagnosis');
     const tieredPage = groupPages.find(p => p.type === 'tiered-teaching');
@@ -126,14 +134,6 @@ function validatePageOrder(pages: CoursePage[]): { valid: boolean; message?: str
         return {
           valid: false,
           message: '学生须完成"试题诊断"才能进入"对话诊断"'
-        };
-      }
-
-      // 对话诊断必须紧跟试题诊断（中间不能有其他配置组的页面）
-      if (conversationIndex !== diagnosisIndex + 1) {
-        return {
-          valid: false,
-          message: '对话诊断页面必须紧跟在对应的试题诊断页面之后'
         };
       }
     }
@@ -157,23 +157,7 @@ function validatePageOrder(pages: CoursePage[]): { valid: boolean; message?: str
         if (tieredIndex < conversationIndex) {
           return {
             valid: false,
-            message: '学生须完成"对话诊断"才能进入"分层教学"'
-          };
-        }
-
-        // 分层教学必须紧跟对话诊断（中间不能有其他配置组的页面）
-        if (tieredIndex !== conversationIndex + 1) {
-          return {
-            valid: false,
-            message: '分层教学页面必须紧跟在对应的对话诊断页面之后'
-          };
-        }
-      } else {
-        // 如果没有对话诊断，分层教学必须紧跟试题诊断
-        if (tieredIndex !== diagnosisIndex + 1) {
-          return {
-            valid: false,
-            message: '分层教学页面必须紧跟在对应的试题诊断页面之后'
+            message: '学生须完成"认知起点诊断"才能进入"分层教学"'
           };
         }
       }
@@ -188,12 +172,9 @@ function validatePageOrder(pages: CoursePage[]): { valid: boolean; message?: str
       // 检查这个范围内是否有其他配置组的页面
       for (let i = minIndex + 1; i < maxIndex; i++) {
         const pageAtIndex = visiblePages[i];
-        const pageGroupId = pageAtIndex.configGroupId ||
-                           pageAtIndex.diagnosisData?.configGroupId ||
-                           pageAtIndex.conversationDiagnosisData?.configGroupId ||
-                           pageAtIndex.tieredTeachingData?.configGroupId;
+        const pageGroupId = getPageConfigGroupId(pageAtIndex);
 
-        if (pageGroupId && !groupPages.includes(pageAtIndex)) {
+        if (pageGroupId && pageGroupId !== groupId) {
           return {
             valid: false,
             message: '不同的"因材施教"设置不能穿插'
