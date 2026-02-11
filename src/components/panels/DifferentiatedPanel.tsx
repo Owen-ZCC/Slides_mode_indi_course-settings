@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { KnowledgePoint, StudentLevel, DiagnosisQuestion, CoursePage, DiagnosisConfig, ConversationDiagnosisConfig, TieredTeachingPageData, TieredLevelConfig, LearningTask, TaskEvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, TieredTeachingPageData as TieredData } from '@/types';
 import { useEditor } from '@/store/EditorContext';
 import { ChevronLeftIcon } from '@/components/icons';
+import { subjects, grades, subjectIcons, getLessonsBySubjectAndGrade, type Lesson, type LessonChapter } from '@/data/lessonData';
 
 export default function DifferentiatedPanel() {
   const { courseData, editorState, dispatchCourse, dispatchEditor } = useEditor();
@@ -49,6 +50,15 @@ export default function DifferentiatedPanel() {
     { id: '3', name: '力的三要素' },
   ]);
   const [boundTieredPageId, setBoundTieredPageId] = useState<string | null>(null);
+
+  // 从资源库导入 - 三步选择流程
+  const [showImportFlow, setShowImportFlow] = useState(false);
+  const [importStep, setImportStep] = useState<1 | 2 | 3>(1);
+  const [selectedSubject, setSelectedSubject] = useState('');
+  const [selectedGrade, setSelectedGrade] = useState('');
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [lessonChapters, setLessonChapters] = useState<LessonChapter[]>([]);
+  const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
 
   // 学习表现等级管理
   const [performanceLevels, setPerformanceLevels] = useState<LearningPerformanceLevel[]>([
@@ -361,6 +371,7 @@ export default function DifferentiatedPanel() {
     }
     setHasUploadedDesign(false);
     setShowStepPages(false);
+    setShowImportFlow(false);
     setCurrentStep(1);
     setKnowledgePoints([
       { id: '1', name: '物质的状态' },
@@ -463,7 +474,194 @@ export default function DifferentiatedPanel() {
     ));
   };
 
-  // 模拟题目数据（只保留单选题、多选题、判断题）
+  // ===== 从资源库导入 - 处理函数 =====
+  const handleStartImport = () => {
+    setShowImportFlow(true);
+    setImportStep(1);
+    setSelectedSubject('');
+    setSelectedGrade('');
+    setSelectedLesson(null);
+    setLessonChapters([]);
+    setExpandedChapter(null);
+  };
+
+  const handleImportSelectSubject = (subject: string) => {
+    setSelectedSubject(subject);
+    setImportStep(2);
+  };
+
+  const handleImportSelectGrade = (grade: string) => {
+    setSelectedGrade(grade);
+    const chapters = getLessonsBySubjectAndGrade(selectedSubject, grade);
+    setLessonChapters(chapters);
+    setExpandedChapter(null);
+    setImportStep(3);
+  };
+
+  const handleImportSelectLesson = (lesson: Lesson) => {
+    setSelectedLesson(lesson);
+  };
+
+  const handleImportBack = () => {
+    if (importStep === 3) {
+      setImportStep(2);
+      setSelectedLesson(null);
+    } else if (importStep === 2) {
+      setImportStep(1);
+      setSelectedGrade('');
+    } else {
+      setShowImportFlow(false);
+    }
+  };
+
+  const toggleImportChapter = (chapter: string) => {
+    setExpandedChapter(expandedChapter === chapter ? null : chapter);
+  };
+
+  // 从资源库导入 - 生成三个页面
+  const handleImportGenerate = () => {
+    if (!selectedSubject || !selectedGrade || !selectedLesson) return;
+
+    const configGroupId = generateConfigGroupId();
+    const groupIndex = getNextGroupIndex();
+    const now = Date.now();
+
+    // 根据选中课节预填知识点
+    const lessonKPs: KnowledgePoint[] = [
+      { id: `kp-${now}-1`, name: '力的概念' },
+      { id: `kp-${now}-2`, name: '力的作用效果' },
+      { id: `kp-${now}-3`, name: '力的三要素' },
+    ];
+
+    const diagKPs: KnowledgePoint[] = [
+      { id: `dkp-${now}-1`, name: '力的定义' },
+      { id: `dkp-${now}-2`, name: '力的单位' },
+      { id: `dkp-${now}-3`, name: '力的示意图' },
+    ];
+
+    const levels: StudentLevel[] = [
+      { id: '1', name: '融会贯通', icon: '🌟', minScore: 80, maxScore: 100, colorClass: 'emerald' },
+      { id: '2', name: '掌握良好', icon: '✨', minScore: 60, maxScore: 79, colorClass: 'teal' },
+      { id: '3', name: '有待提升', icon: '💡', minScore: 40, maxScore: 59, colorClass: 'amber' },
+      { id: '4', name: '基础薄弱', icon: '🌱', minScore: 0, maxScore: 39, colorClass: 'rose' },
+    ];
+
+    const diagConfig: DiagnosisConfig = {
+      knowledgePoints: diagKPs,
+      studentLevels: levels,
+      selectedDifficulties: ['hard', 'medium-hard', 'medium', 'medium-easy', 'easy'],
+      questionCounts: { hard: 2, 'medium-hard': 2, medium: 3, 'medium-easy': 2, easy: 2 },
+      conversationEnabled: true,
+    };
+
+    // 模拟题目（力相关）
+    const forceQuestions: DiagnosisQuestion[] = [
+      { id: `fq-${now}-1`, type: 'single', difficulty: 'hard', knowledgePoint: '力的概念', content: '一个物体受到两个力的作用，这两个力的三要素完全相同，则这两个力（）', options: ['A. 一定是平衡力', 'B. 一定不是平衡力', 'C. 可能是平衡力', 'D. 无法判断'], answer: 'B', analysis: '三要素完全相同意味着方向也相同，而平衡力要求方向相反，所以一定不是平衡力。' },
+      { id: `fq-${now}-2`, type: 'multiple', difficulty: 'hard', knowledgePoint: '力的作用效果', content: '关于力的作用效果，下列说法正确的是？（多选）', options: ['A. 力可以改变物体的运动状态', 'B. 力可以改变物体的形状', 'C. 力的作用效果与力的大小有关', 'D. 力的作用效果与力的方向无关'], answer: ['A', 'B', 'C'], analysis: '力的作用效果包括改变运动状态和改变形状，且与力的三要素（大小、方向、作用点）都有关。' },
+      { id: `fq-${now}-3`, type: 'single', difficulty: 'medium-hard', knowledgePoint: '力的三要素', content: '用力推门时，手的位置离门轴越远越容易推开，这说明力的作用效果与什么有关？', options: ['A. 力的大小', 'B. 力的方向', 'C. 力的作用点', 'D. 力的单位'], answer: 'C', analysis: '手离门轴的距离不同，即力的作用点不同，效果不同，说明力的作用效果与作用点有关。' },
+      { id: `fq-${now}-4`, type: 'judge', difficulty: 'medium-hard', knowledgePoint: '力的概念', content: '一个物体也可以产生力的作用。', options: ['A. 对', 'B. 错'], answer: 'B', analysis: '力是物体对物体的作用，至少需要两个物体，一个物体不能产生力。' },
+      { id: `fq-${now}-5`, type: 'single', difficulty: 'medium', knowledgePoint: '力的概念', content: '下列关于力的说法正确的是？', options: ['A. 两个物体不接触就不会有力的作用', 'B. 力可以离开物体而独立存在', 'C. 力是物体对物体的作用', 'D. 受力物体不会对施力物体产生力'], answer: 'C', analysis: '力是物体对物体的作用，不能离开物体存在，且力的作用是相互的。' },
+      { id: `fq-${now}-6`, type: 'single', difficulty: 'medium', knowledgePoint: '力的单位', content: '力的国际单位是？', options: ['A. 千克', 'B. 牛顿', 'C. 帕斯卡', 'D. 焦耳'], answer: 'B', analysis: '力的国际单位是牛顿（N），简称牛。' },
+      { id: `fq-${now}-7`, type: 'judge', difficulty: 'medium', knowledgePoint: '力的作用效果', content: '力的作用是相互的。', options: ['A. 对', 'B. 错'], answer: 'A', analysis: '物体间力的作用是相互的，施力物体同时也是受力物体。' },
+      { id: `fq-${now}-8`, type: 'single', difficulty: 'medium-easy', knowledgePoint: '力的三要素', content: '力的三要素是指？', options: ['A. 大小、方向、作用点', 'B. 大小、速度、方向', 'C. 重力、弹力、摩擦力', 'D. 大小、单位、方向'], answer: 'A', analysis: '力的三要素是力的大小、方向和作用点。' },
+      { id: `fq-${now}-9`, type: 'judge', difficulty: 'medium-easy', knowledgePoint: '力的概念', content: '磁铁能吸引铁钉，说明不接触的物体之间也可以有力的作用。', options: ['A. 对', 'B. 错'], answer: 'A', analysis: '磁力是非接触力，说明不接触的物体间也能产生力的作用。' },
+      { id: `fq-${now}-10`, type: 'single', difficulty: 'easy', knowledgePoint: '力的概念', content: '下列哪个是力的作用？', options: ['A. 用手推桌子', 'B. 看书', 'C. 听音乐', 'D. 想问题'], answer: 'A', analysis: '用手推桌子是手对桌子施加了力的作用。' },
+      { id: `fq-${now}-11`, type: 'judge', difficulty: 'easy', knowledgePoint: '力的单位', content: '力的单位是牛顿，简称牛，符号是N。', options: ['A. 对', 'B. 错'], answer: 'A', analysis: '力的国际单位是牛顿（Newton），简称牛，符号N。' },
+    ];
+
+    // 1. 创建试题诊断页面
+    const diagnosisPageId = `diagnosis-${now}`;
+    const diagnosisPage: CoursePage = {
+      id: diagnosisPageId,
+      title: `因材施教-试题诊断${groupIndex}`,
+      type: 'diagnosis',
+      elements: [],
+      order: courseData.pages.length,
+      configGroupId,
+      diagnosisData: {
+        questions: forceQuestions,
+        knowledgePoints: diagKPs.map(kp => kp.name),
+        config: diagConfig,
+        configGroupId,
+        groupIndex,
+      }
+    };
+
+    // 2. 创建对话诊断页面
+    const convPageId = `conversation-diagnosis-${now + 1}`;
+    const convPage: CoursePage = {
+      id: convPageId,
+      title: `因材施教-对话诊断${groupIndex}`,
+      type: 'conversation-diagnosis',
+      elements: [],
+      order: courseData.pages.length + 1,
+      hidden: false,
+      configGroupId,
+      conversationDiagnosisData: {
+        config: {
+          aiRole: '专业物理教师',
+          dialogueStyle: 'friendly',
+          scoringPreference: 'moderate',
+          encouragementStyle: 'moderate',
+          maxRounds: 5,
+          specialFocus: '重点关注学生对力的概念和力的三要素的理解',
+          customPrompt: defaultConversationPrompt,
+          isAdvancedMode: false,
+        },
+        linkedDiagnosisPageId: diagnosisPageId,
+        configGroupId,
+      }
+    };
+
+    // 3. 创建分层教学页面
+    const tieredConfigs: TieredLevelConfig[] = levels.map(level => ({
+      levelId: level.id,
+      levelName: level.name,
+      levelIcon: level.icon,
+      levelColor: level.colorClass,
+      learningTasks: getDefaultLearningTasks(level.id),
+      performanceLevels: [...performanceLevels],
+      agentConfig: getDefaultAgentConfig(level.id, level.name),
+    }));
+
+    const tieredPageId = `tiered-teaching-${now + 2}`;
+    const tieredPage: CoursePage = {
+      id: tieredPageId,
+      title: `因材施教-分层教学${groupIndex}`,
+      type: 'tiered-teaching',
+      elements: [],
+      order: courseData.pages.length + 2,
+      configGroupId,
+      tieredTeachingData: {
+        configGroupId,
+        groupIndex,
+        lessonKnowledgePoints: lessonKPs,
+        studentLevels: [...levels],
+        tieredConfigs,
+      }
+    };
+
+    // 依次添加三个页面
+    dispatchCourse({ type: 'ADD_PAGE', payload: diagnosisPage });
+    dispatchCourse({ type: 'ADD_PAGE', payload: convPage });
+    dispatchCourse({ type: 'ADD_PAGE', payload: tieredPage });
+
+    // 加载配置到侧边栏状态
+    setKnowledgePoints(diagKPs);
+    setStudentLevels(levels);
+    setSelectedDifficulties(['hard', 'medium-hard', 'medium', 'medium-easy', 'easy']);
+    setQuestionCounts({ hard: 2, 'medium-hard': 2, medium: 3, 'medium-easy': 2, easy: 2 });
+    setConversationEnabled(true);
+    setTieredKnowledgePoints(lessonKPs);
+
+    // 选中试题诊断页面并进入配置模式
+    setBoundPageId(diagnosisPageId);
+    setBoundTieredPageId(tieredPageId);
+    setShowImportFlow(false);
+    setShowStepPages(true);
+    setCurrentStep(1);
+    dispatchEditor({ type: 'SELECT_PAGE', payload: diagnosisPageId });
+  };
   const mockQuestions = [
     // 难题
     {
@@ -973,7 +1171,7 @@ export default function DifferentiatedPanel() {
 
       {/* 面板内容 */}
       <div className="flex-1 overflow-y-auto">
-        {!showStepPages ? (
+        {!showStepPages && !showImportFlow ? (
           // 入口选择区域
           <div className="p-5 space-y-3">
             <button
@@ -992,7 +1190,7 @@ export default function DifferentiatedPanel() {
               </div>
             </button>
             <button
-              onClick={() => alert('正在开发中')}
+              onClick={handleStartImport}
               className="w-full bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors text-left"
             >
               <div className="flex items-start gap-3">
@@ -1006,6 +1204,186 @@ export default function DifferentiatedPanel() {
                 </svg>
               </div>
             </button>
+          </div>
+        ) : showImportFlow ? (
+          // 从资源库导入 - 三步选择流程
+          <div className="flex flex-col h-full">
+            {/* 头部 */}
+            <div className="px-5 pt-4 pb-3">
+              <div className="flex items-center gap-2 mb-3">
+                <button
+                  onClick={handleImportBack}
+                  className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="15 18 9 12 15 6"/>
+                  </svg>
+                </button>
+                <h2 className="text-lg font-bold text-gray-900">选择课程内容</h2>
+              </div>
+              <p className="text-xs text-gray-500 mb-3">
+                {importStep === 1 && '第一步：选择学科'}
+                {importStep === 2 && '第二步：选择年级'}
+                {importStep === 3 && '第三步：选择课节'}
+              </p>
+              {/* 进度条 */}
+              <div className="flex items-center gap-1.5">
+                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 1 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
+                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 2 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
+                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 3 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
+              </div>
+            </div>
+
+            {/* 内容区域 */}
+            <div className="flex-1 overflow-y-auto px-5 pb-3">
+              {/* 步骤1：选择学科 */}
+              {importStep === 1 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {subjects.map((subject) => (
+                    <button
+                      key={subject}
+                      onClick={() => handleImportSelectSubject(subject)}
+                      className="bg-gray-50 rounded-xl p-3 hover:bg-emerald-50 hover:border-emerald-300 border-2 border-transparent transition-all text-left"
+                    >
+                      <div className="text-2xl mb-1">{subjectIcons[subject] || '📖'}</div>
+                      <div className="text-sm font-semibold text-gray-900">{subject}</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* 步骤2：选择年级 */}
+              {importStep === 2 && (
+                <div>
+                  <div className="text-center mb-3">
+                    <span className="text-xs text-gray-500">已选学科：</span>
+                    <span className="ml-1 text-sm font-semibold text-emerald-600">{selectedSubject}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {grades.map((grade) => (
+                      <button
+                        key={grade}
+                        onClick={() => handleImportSelectGrade(grade)}
+                        className="bg-gray-50 rounded-xl p-3 hover:bg-emerald-50 hover:border-emerald-300 border-2 border-transparent transition-all text-left"
+                      >
+                        <div className="text-xl mb-1">🎓</div>
+                        <div className="text-sm font-semibold text-gray-900">{grade}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 步骤3：选择课节 */}
+              {importStep === 3 && (
+                <div>
+                  <div className="text-center mb-3">
+                    <span className="text-xs text-gray-500">已选：</span>
+                    <span className="ml-1 text-sm font-semibold text-emerald-600">{selectedSubject}</span>
+                    <span className="mx-1 text-gray-400">·</span>
+                    <span className="text-sm font-semibold text-teal-600">{selectedGrade}</span>
+                  </div>
+
+                  {lessonChapters.length > 0 ? (
+                    <div className="space-y-2">
+                      {lessonChapters.map((chapterData, chapterIndex) => {
+                        const isExpanded = expandedChapter === chapterData.chapter;
+                        return (
+                          <div
+                            key={chapterData.chapter}
+                            className="border border-gray-200 rounded-xl overflow-hidden transition-all hover:border-emerald-300"
+                          >
+                            <button
+                              onClick={() => toggleImportChapter(chapterData.chapter)}
+                              className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-emerald-50 transition-all"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className={`w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 text-xs font-bold transition-transform ${isExpanded ? 'scale-110' : ''}`}>
+                                  {chapterIndex + 1}
+                                </div>
+                                <span className="font-medium text-gray-900 text-sm text-left">{chapterData.chapter}</span>
+                              </div>
+                              <svg
+                                className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                              </svg>
+                            </button>
+
+                            <div className={`transition-all overflow-hidden ${isExpanded ? 'max-h-[400px]' : 'max-h-0'}`}>
+                              <div className="p-2 space-y-1 bg-white">
+                                {chapterData.lessons.map((lesson) => {
+                                  const isSelected = selectedLesson?.id === lesson.id;
+                                  return (
+                                    <button
+                                      key={lesson.id}
+                                      onClick={() => handleImportSelectLesson(lesson)}
+                                      className={`w-full text-left p-3 rounded-lg border transition-all ${
+                                        isSelected
+                                          ? 'border-emerald-400 bg-emerald-50'
+                                          : 'border-gray-200 hover:border-emerald-200 bg-white'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-semibold ${
+                                          isSelected ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600'
+                                        }`}>
+                                          {lesson.order}
+                                        </div>
+                                        <span className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-gray-700'}`}>
+                                          {lesson.name}
+                                        </span>
+                                        {isSelected && (
+                                          <svg className="w-4 h-4 text-emerald-500 ml-auto" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                                          </svg>
+                                        )}
+                                      </div>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-400 text-sm">
+                      暂无该学科年级的课节数据
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 底部按钮 */}
+            <div className="flex items-center justify-between p-5 border-t border-gray-200">
+              <button
+                onClick={handleImportBack}
+                className="flex items-center gap-1 h-9 px-3 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                上一步
+              </button>
+              <button
+                onClick={handleImportGenerate}
+                disabled={!selectedLesson}
+                className={`flex items-center gap-1 h-9 px-4 rounded-lg text-sm font-semibold transition-all ${
+                  selectedLesson
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                生成页面
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+            </div>
           </div>
         ) : (
           // 步骤页面区域
