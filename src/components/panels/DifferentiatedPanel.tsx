@@ -51,6 +51,9 @@ export default function DifferentiatedPanel() {
   ]);
   const [boundTieredPageId, setBoundTieredPageId] = useState<string | null>(null);
 
+  // 智能学伴设置开关（本地状态，页面未生成时也可操作）
+  const [smartCompanionEnabled, setSmartCompanionEnabled] = useState(true);
+
   // 从资源库导入 - 三步选择流程
   const [showImportFlow, setShowImportFlow] = useState(false);
   const [importStep, setImportStep] = useState<1 | 2 | 3>(1);
@@ -68,6 +71,10 @@ export default function DifferentiatedPanel() {
     { id: 'perf-4', name: '需要加强', icon: '💪', color: 'rose', minScore: 0, maxScore: 59, description: '学习任务完成度不足，需要额外辅导' },
   ]);
   const [expandedPerformanceLevelId, setExpandedPerformanceLevelId] = useState<string | null>(null);
+
+  // 当前配置组ID和序号（创建空白时提前生成）
+  const [currentConfigGroupId, setCurrentConfigGroupId] = useState<string | null>(null);
+  const [currentGroupIndex, setCurrentGroupIndex] = useState<number | null>(null);
 
   // 生成新的配置组ID
   const generateConfigGroupId = () => `config-group-${Date.now()}`;
@@ -337,11 +344,24 @@ export default function DifferentiatedPanel() {
         if (selectedPage.tieredTeachingData?.lessonKnowledgePoints) {
           setTieredKnowledgePoints(selectedPage.tieredTeachingData.lessonKnowledgePoints);
         }
+        // 同步智能学伴开关状态
+        setSmartCompanionEnabled(selectedPage.tieredTeachingData?.smartCompanionEnabled !== false);
 
         setBoundPageId(diagnosisPage.id);
         setBoundTieredPageId(selectedPage.id);
         setShowStepPages(true);
         setCurrentStep(2); // 直接跳转到分层教学步骤
+      }
+    } else if (selectedPage?.type === 'placeholder') {
+      // 占位页面：保持当前配置状态不变
+      if (selectedPage.placeholderFor === 'diagnosis') {
+        setBoundPageId(selectedPage.id);
+        setShowStepPages(true);
+        setCurrentStep(1);
+      } else if (selectedPage.placeholderFor === 'tiered-teaching') {
+        setBoundTieredPageId(selectedPage.id);
+        setShowStepPages(true);
+        setCurrentStep(2);
       }
     } else {
       // 如果选中的不是因材施教相关页面，清除绑定并重置状态
@@ -362,12 +382,43 @@ export default function DifferentiatedPanel() {
   const handleSkipUpload = () => {
     setHasUploadedDesign(false);
     setShowStepPages(true);
+
+    // 提前生成配置组ID和序号
+    const configGroupId = generateConfigGroupId();
+    const groupIndex = getNextGroupIndex();
+    setCurrentConfigGroupId(configGroupId);
+    setCurrentGroupIndex(groupIndex);
+
+    // 创建诊断占位页面
+    const placeholderId = `placeholder-diagnosis-${Date.now()}`;
+    const placeholderPage: CoursePage = {
+      id: placeholderId,
+      title: `因材施教-试题诊断${groupIndex} (配置中...)`,
+      type: 'placeholder',
+      elements: [],
+      order: courseData.pages.length,
+      configGroupId,
+      placeholderFor: 'diagnosis',
+    };
+
+    dispatchCourse({ type: 'ADD_PAGE', payload: placeholderPage });
+    dispatchEditor({ type: 'SELECT_PAGE', payload: placeholderId });
+    setBoundPageId(placeholderId);
   };
 
   // 重置因材施教
   const handleReset = () => {
     if (!confirm('确定要重置因材施教吗？这将删除所有相关页面和配置。')) {
       return;
+    }
+    // 删除关联的 placeholder 页面
+    if (boundPageId) {
+      const page = courseData.pages.find(p => p.id === boundPageId && p.type === 'placeholder');
+      if (page) dispatchCourse({ type: 'DELETE_PAGE', payload: boundPageId });
+    }
+    if (boundTieredPageId) {
+      const page = courseData.pages.find(p => p.id === boundTieredPageId && p.type === 'placeholder');
+      if (page) dispatchCourse({ type: 'DELETE_PAGE', payload: boundTieredPageId });
     }
     setHasUploadedDesign(false);
     setShowStepPages(false);
@@ -379,6 +430,11 @@ export default function DifferentiatedPanel() {
       { id: '3', name: '观察能力' },
     ]);
     setConversationEnabled(false);
+    setSmartCompanionEnabled(true);
+    setBoundPageId(null);
+    setBoundTieredPageId(null);
+    setCurrentConfigGroupId(null);
+    setCurrentGroupIndex(null);
   };
 
   // 添加知识点
@@ -815,21 +871,27 @@ export default function DifferentiatedPanel() {
       conversationEnabled,
     };
 
-    // 如果已绑定页面，更新该页面；否则创建新页面
+    // 如果已绑定页面，更新该页面（包括从 placeholder 替换为 diagnosis）
     if (boundPageId) {
       const existingPage = courseData.pages.find(p => p.id === boundPageId);
       if (existingPage) {
+        const cgId = existingPage.configGroupId || currentConfigGroupId || generateConfigGroupId();
+        const gIdx = existingPage.diagnosisData?.groupIndex || currentGroupIndex || getNextGroupIndex();
         const updatedPage: CoursePage = {
           ...existingPage,
+          title: `因材施教-试题诊断${gIdx}`,
+          type: 'diagnosis',
+          placeholderFor: undefined,
           diagnosisData: {
             questions: selectedQuestions,
             knowledgePoints: knowledgePoints.map(kp => kp.name),
             config,
-            configGroupId: existingPage.diagnosisData?.configGroupId || generateConfigGroupId(),
-            groupIndex: existingPage.diagnosisData?.groupIndex || getNextGroupIndex(),
+            configGroupId: cgId,
+            groupIndex: gIdx,
           }
         };
         dispatchCourse({ type: 'UPDATE_PAGE', payload: updatedPage });
+        dispatchEditor({ type: 'SELECT_PAGE', payload: existingPage.id });
         return;
       }
     }
@@ -865,6 +927,18 @@ export default function DifferentiatedPanel() {
   // 导航
   const handlePreviousStep = () => {
     if (currentStep > 1) {
+      // 从 step 2 回到 step 1 时，删除分层教学的 placeholder 页面
+      if (currentStep === 2 && boundTieredPageId) {
+        const tieredPage = courseData.pages.find(p => p.id === boundTieredPageId);
+        if (tieredPage && tieredPage.type === 'placeholder') {
+          dispatchCourse({ type: 'DELETE_PAGE', payload: boundTieredPageId });
+          setBoundTieredPageId(null);
+        }
+      }
+      // 回到 step 1 时选中诊断页面
+      if (boundPageId) {
+        dispatchEditor({ type: 'SELECT_PAGE', payload: boundPageId });
+      }
       setCurrentStep(currentStep - 1);
     }
   };
@@ -872,6 +946,35 @@ export default function DifferentiatedPanel() {
   const handleNextStep = () => {
     if (currentStep === 1) {
       setCurrentStep(2);
+
+      // 创建分层教学占位页面
+      const diagnosisPage = getCurrentDiagnosisPage();
+      const cgId = currentConfigGroupId || diagnosisPage?.diagnosisData?.configGroupId;
+      const gIdx = currentGroupIndex || diagnosisPage?.diagnosisData?.groupIndex || 1;
+
+      if (cgId && !boundTieredPageId) {
+        // 找到该配置组最后一个页面的位置
+        const conversationPage = courseData.pages.find(
+          p => p.type === 'conversation-diagnosis' && p.conversationDiagnosisData?.configGroupId === cgId
+        );
+        const lastPageInGroup = conversationPage || diagnosisPage;
+        const insertOrder = lastPageInGroup ? lastPageInGroup.order + 1 : courseData.pages.length;
+
+        const placeholderId = `placeholder-tiered-${Date.now()}`;
+        const placeholderPage: CoursePage = {
+          id: placeholderId,
+          title: `因材施教-分层教学${gIdx} (配置中...)`,
+          type: 'placeholder',
+          elements: [],
+          order: insertOrder,
+          configGroupId: cgId,
+          placeholderFor: 'tiered-teaching',
+        };
+
+        dispatchCourse({ type: 'ADD_PAGE', payload: placeholderPage });
+        dispatchEditor({ type: 'SELECT_PAGE', payload: placeholderId });
+        setBoundTieredPageId(placeholderId);
+      }
     }
   };
 
@@ -1086,7 +1189,7 @@ export default function DifferentiatedPanel() {
       agentConfig: getDefaultAgentConfig(level.id, level.name),
     }));
 
-    // 检查是否已存在该配置组的分层教学页面
+    // 检查是否已存在该配置组的分层教学页面（非 placeholder）
     const existingTieredPage = courseData.pages.find(
       p => p.type === 'tiered-teaching' && p.tieredTeachingData?.configGroupId === configGroupId
     );
@@ -1101,12 +1204,39 @@ export default function DifferentiatedPanel() {
           lessonKnowledgePoints: tieredKnowledgePoints.filter(kp => kp.name.trim()),
           studentLevels: [...studentLevels],
           tieredConfigs,
+          smartCompanionEnabled,
         }
       };
       dispatchCourse({ type: 'UPDATE_PAGE', payload: updatedPage });
       dispatchEditor({ type: 'SELECT_PAGE', payload: existingTieredPage.id });
       setBoundTieredPageId(existingTieredPage.id);
       return;
+    }
+
+    // 检查是否有 placeholder 页面需要替换
+    if (boundTieredPageId) {
+      const placeholderPage = courseData.pages.find(p => p.id === boundTieredPageId && p.type === 'placeholder');
+      if (placeholderPage) {
+        const updatedPage: CoursePage = {
+          ...placeholderPage,
+          title: `因材施教-分层教学${groupIndex}`,
+          type: 'tiered-teaching',
+          placeholderFor: undefined,
+          configGroupId,
+          tieredTeachingData: {
+            configGroupId,
+            groupIndex,
+            lessonKnowledgePoints: tieredKnowledgePoints.filter(kp => kp.name.trim()),
+            studentLevels: [...studentLevels],
+            tieredConfigs,
+            smartCompanionEnabled,
+          }
+        };
+        dispatchCourse({ type: 'UPDATE_PAGE', payload: updatedPage });
+        dispatchEditor({ type: 'SELECT_PAGE', payload: placeholderPage.id });
+        setBoundTieredPageId(placeholderPage.id);
+        return;
+      }
     }
 
     // 找到该配置组最后一个页面的位置（对话诊断或试题诊断）
@@ -1130,6 +1260,7 @@ export default function DifferentiatedPanel() {
         lessonKnowledgePoints: tieredKnowledgePoints.filter(kp => kp.name.trim()),
         studentLevels: [...studentLevels],
         tieredConfigs,
+        smartCompanionEnabled,
       }
     };
 
@@ -1565,7 +1696,7 @@ export default function DifferentiatedPanel() {
                     onClick={handleGenerateTestPage}
                     className="w-full h-10 rounded-xl bg-gradient-to-r from-primary-500 to-primary-400 text-white text-sm font-semibold hover:from-primary-600 hover:to-primary-500 transition-colors"
                   >
-                    {boundPageId ? '更新页面' : '生成页面'}
+                    {boundPageId && courseData.pages.find(p => p.id === boundPageId)?.type !== 'placeholder' ? '更新页面' : '生成页面'}
                   </button>
                 </div>
 
@@ -1708,6 +1839,42 @@ export default function DifferentiatedPanel() {
                   </button>
                 </div>
 
+                {/* 3. 智能学伴设置开关 */}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xl">🤖</span>
+                    <div className="flex-1">
+                      <div className="text-sm font-semibold text-gray-900">智能学伴设置</div>
+                      <div className="text-xs text-gray-500">开启后可在分层教学页面配置智能学伴</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={smartCompanionEnabled}
+                        onChange={(e) => {
+                          const enabled = e.target.checked;
+                          setSmartCompanionEnabled(enabled);
+                          if (boundTieredPageId) {
+                            const tieredPage = courseData.pages.find(p => p.id === boundTieredPageId);
+                            if (tieredPage?.tieredTeachingData) {
+                              const updatedPage: CoursePage = {
+                                ...tieredPage,
+                                tieredTeachingData: {
+                                  ...tieredPage.tieredTeachingData,
+                                  smartCompanionEnabled: enabled,
+                                },
+                              };
+                              dispatchCourse({ type: 'UPDATE_PAGE', payload: updatedPage });
+                            }
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
+                    </label>
+                  </div>
+                </div>
+
                 {/* 4. 生成分层教学页面按钮 */}
                 <div className="bg-gray-50 rounded-xl p-4">
                   <div className="flex items-start gap-2 mb-3">
@@ -1726,7 +1893,7 @@ export default function DifferentiatedPanel() {
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     }`}
                   >
-                    {boundTieredPageId ? '更新页面' : '生成页面'}
+                    {boundTieredPageId && courseData.pages.find(p => p.id === boundTieredPageId)?.type !== 'placeholder' ? '更新页面' : '生成页面'}
                   </button>
                   {(studentLevels.length === 0 || tieredKnowledgePoints.length === 0) && (
                     <p className="mt-2 text-xs text-gray-500 text-center">

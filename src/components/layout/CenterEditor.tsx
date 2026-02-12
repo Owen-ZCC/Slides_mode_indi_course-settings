@@ -2174,6 +2174,21 @@ export default function CenterEditor() {
             return <TieredTeachingEditor page={selectedPage} />;
           }
 
+          // 如果是占位页面，渲染占位提示
+          if (selectedPage?.type === 'placeholder') {
+            return (
+              <div className="flex-1 w-full h-full bg-white flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-6xl mb-4 opacity-40">📄</div>
+                  <div className="text-base font-medium text-gray-400">
+                    {selectedPage.placeholderFor === 'diagnosis' ? '等待生成试题诊断页面...' : '等待生成分层教学页面...'}
+                  </div>
+                  <div className="text-sm text-gray-300 mt-1">请在左侧面板完成配置后点击"生成页面"</div>
+                </div>
+              </div>
+            );
+          }
+
           // 默认内容
           return (
             <div className="flex-1 w-full h-auto bg-white shadow-none rounded-none flex items-center justify-center p-10">
@@ -2208,7 +2223,8 @@ export default function CenterEditor() {
               const isDiagnosis = page.type === 'diagnosis';
               const isConversationDiagnosis = page.type === 'conversation-diagnosis';
               const isTieredTeaching = page.type === 'tiered-teaching';
-              const isSpecialPage = isDiagnosis || isConversationDiagnosis || isTieredTeaching;
+              const isPlaceholder = page.type === 'placeholder';
+              const isSpecialPage = isDiagnosis || isConversationDiagnosis || isTieredTeaching || isPlaceholder;
               const isDragging = draggedPageId === page.id;
               const isDragOver = dragOverPageId === page.id;
               return (
@@ -2234,16 +2250,22 @@ export default function CenterEditor() {
                     }
                   }}
                 >
-                  <div className={`w-[190px] h-[110px] flex-shrink-0 rounded-xl border-2 bg-white cursor-pointer relative transition-all flex flex-col items-center justify-center text-xs ${
+                  <div className={`w-[190px] h-[110px] flex-shrink-0 rounded-xl bg-white cursor-pointer relative transition-all flex flex-col items-center justify-center text-xs ${
+                    isPlaceholder ? 'border-2 border-dashed' : 'border-2'
+                  } ${
                     isDragOver
                       ? 'border-blue-500 bg-blue-50 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]'
                       : isSelected
-                        ? isSpecialPage
-                          ? 'border-primary-500 shadow-[0_0_0_2px_rgba(238,129,44,0.1)]'
-                          : 'border-orange-500 shadow-[0_0_0_2px_rgba(255,149,0,0.1)]'
-                        : isSpecialPage
-                          ? 'border-gray-200 hover:border-gray-300 hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(0,0,0,0.08)]'
-                          : 'border-gray-200'
+                        ? isPlaceholder
+                          ? 'border-primary-400 bg-primary-50/30 shadow-[0_0_0_2px_rgba(238,129,44,0.1)]'
+                          : isSpecialPage
+                            ? 'border-primary-500 shadow-[0_0_0_2px_rgba(238,129,44,0.1)]'
+                            : 'border-orange-500 shadow-[0_0_0_2px_rgba(255,149,0,0.1)]'
+                        : isPlaceholder
+                          ? 'border-gray-300 bg-gray-50/50 hover:border-primary-300 hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(0,0,0,0.08)]'
+                          : isSpecialPage
+                            ? 'border-gray-200 hover:border-gray-300 hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(0,0,0,0.08)]'
+                            : 'border-gray-200'
                   }`}>
                     <span className="absolute top-2 left-2.5 text-[11px] font-bold text-gray-500 bg-white w-6 h-6 rounded-md flex items-center justify-center">
                       {index + 1}
@@ -2278,6 +2300,37 @@ export default function CenterEditor() {
                     <span className={`text-sm ${isSelected ? (isSpecialPage ? 'text-primary-600 font-medium' : 'text-orange-600 font-medium') : 'text-gray-500'}`}>
                       {page.title}
                     </span>
+                    {/* 分层教学页面：任务数字快捷按钮 */}
+                    {isTieredTeaching && page.tieredTeachingData && (() => {
+                      const levelIndex = Math.min(
+                        editorState.tieredLevelIndex,
+                        page.tieredTeachingData.tieredConfigs.length - 1
+                      );
+                      const tasks = page.tieredTeachingData.tieredConfigs[levelIndex]?.learningTasks || [];
+                      if (tasks.length === 0) return null;
+                      return (
+                        <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                          {tasks.map((_, tIdx) => (
+                            <button
+                              key={tIdx}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                dispatchEditor({ type: 'SELECT_PAGE', payload: page.id });
+                                dispatchEditor({ type: 'SET_ACTIVE_PANEL', payload: 'differentiated' });
+                                setTimeout(() => {
+                                  const el = document.getElementById(`task-${levelIndex}-${tIdx}`);
+                                  el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                }, 100);
+                              }}
+                              className="w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center transition-all bg-primary-100 text-primary-600 hover:bg-primary-500 hover:text-white"
+                              title={`定位到任务 ${tIdx + 1}`}
+                            >
+                              {tIdx + 1}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               );

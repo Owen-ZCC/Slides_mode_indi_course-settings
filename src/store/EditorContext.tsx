@@ -22,6 +22,7 @@ const initialEditorState: EditorState = {
   saveStatus: 'unsaved',
   editorMode: 'initial',
   currentTool: null,
+  tieredLevelIndex: 0,
 };
 
 const initialCourseData: CourseData = {
@@ -46,7 +47,8 @@ type EditorAction =
   | { type: 'SET_EDITOR_MODE'; payload: 'initial' | 'edit' | 'tool' }
   | { type: 'SET_CURRENT_TOOL'; payload: ToolType | null }
   | { type: 'SWITCH_TO_EDIT_MODE' }
-  | { type: 'SWITCH_TO_TOOL_MODE'; payload: ToolType };
+  | { type: 'SWITCH_TO_TOOL_MODE'; payload: ToolType }
+  | { type: 'SET_TIERED_LEVEL_INDEX'; payload: number };
 
 type CourseAction =
   | { type: 'SET_TITLE'; payload: string }
@@ -90,6 +92,8 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
       return { ...state, editorMode: 'edit', currentTool: null };
     case 'SWITCH_TO_TOOL_MODE':
       return { ...state, editorMode: 'tool', currentTool: action.payload };
+    case 'SET_TIERED_LEVEL_INDEX':
+      return { ...state, tieredLevelIndex: action.payload };
     default:
       return state;
   }
@@ -97,7 +101,7 @@ function editorReducer(state: EditorState, action: EditorAction): EditorState {
 
 // 验证页面顺序：对话诊断必须在试题诊断之后，分层教学必须在诊断之后（只验证非隐藏页面）
 function validatePageOrder(pages: CoursePage[]): { valid: boolean; message?: string } {
-  const visiblePages = pages.filter(p => !p.hidden);
+  const visiblePages = pages.filter(p => !p.hidden && p.type !== 'placeholder');
 
   // 获取页面的配置组ID
   const getPageConfigGroupId = (page: CoursePage): string | undefined => {

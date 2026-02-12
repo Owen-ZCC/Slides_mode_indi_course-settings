@@ -1,330 +1,21 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useEditor } from '@/store/EditorContext';
-import { CoursePage, TieredLevelConfig, LearningTask, TaskEvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle, AvatarConfig, VoiceConfig, BackgroundConfig, ToolType, TaskAttachedTool } from '@/types';
-import { CircleIcon, MessageIcon, CheckIcon, CameraIcon, ListIcon, MenuIcon, PenToolIcon, CardIcon, CodeIcon, LayersIcon, GridIcon, PlusIcon, ImageIcon, TrashIcon, CopyIcon } from '@/components/icons';
-
-// 记录已触发过魔法棒动画的页面ID，避免重复触发
-const animatedPageIds = new Set<string>();
-
-// 弹窗内工具主内容编辑器
-function ToolContentEditor({ toolId, toolType }: { toolId: string; toolType: 'tool' | 'app' }) {
-  const [question, setQuestion] = useState('');
-  const [options, setOptions] = useState([
-    { text: '', isCorrect: true },
-    { text: '', isCorrect: false },
-    { text: '', isCorrect: false },
-  ]);
-  const [sortItems, setSortItems] = useState([
-    { id: 1, text: '' },
-    { id: 2, text: '' },
-    { id: 3, text: '' },
-  ]);
-  const [flashcards, setFlashcards] = useState([
-    { id: 1, front: '', back: '' },
-  ]);
-  const [fillAnswer, setFillAnswer] = useState('');
-
-  // 选择题
-  if (toolId === 'choice') {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <span className="text-base font-bold text-[#ff9500]">题目 1</span>
-          <div className="flex items-center gap-1">
-            <button className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-600"><CopyIcon className="w-4 h-4" /></button>
-            <button className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500"><TrashIcon className="w-4 h-4" /></button>
-          </div>
-        </div>
-        <div className="relative">
-          <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="输入题目内容..." className="w-full min-h-[80px] p-4 pr-12 border-[1.5px] border-gray-200 rounded-[10px] text-sm text-gray-900 bg-[#fafbfc] resize-y focus:outline-none focus:border-[#ff9500] focus:bg-white" />
-          <button className="absolute right-2 bottom-2 w-8 h-8 rounded-lg border-[1.5px] border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]" title="上传图片"><ImageIcon className="w-4 h-4" /></button>
-        </div>
-        <div className="space-y-2.5">
-          {options.map((opt, i) => (
-            <div key={i} className="flex items-center gap-3 p-1 rounded-lg group hover:bg-[#f9fafb]">
-              <button onClick={() => setOptions(options.map((o, j) => ({ ...o, isCorrect: j === i })))} className={`w-[22px] h-[22px] rounded flex-shrink-0 border-2 flex items-center justify-center ${opt.isCorrect ? 'border-[#ff9500] bg-[#ff9500] text-white' : 'border-gray-300 hover:border-[#ff9500]'}`}>
-                {opt.isCorrect && <CheckIcon className="w-3.5 h-3.5" />}
-              </button>
-              <input type="text" value={opt.text} onChange={(e) => { const n = [...options]; n[i].text = e.target.value; setOptions(n); }} placeholder={`选项${String.fromCharCode(65 + i)}`} className="flex-1 h-10 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-[#ff9500]" />
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
-                <button onClick={() => setOptions([...options, { text: '', isCorrect: false }])} className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:bg-gray-200"><PlusIcon className="w-3.5 h-3.5" /></button>
-                {options.length > 2 && <button onClick={() => setOptions(options.filter((_, j) => j !== i))} className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}
-              </div>
-            </div>
-          ))}
-          <button onClick={() => setOptions([...options, { text: '', isCorrect: false }])} className="inline-flex items-center gap-2 h-8 px-3 ml-[34px] mt-2 border-[1.5px] border-dashed border-gray-300 rounded-lg text-xs font-medium text-gray-500 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]">
-            <PlusIcon className="w-3.5 h-3.5" /><span>选项</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 问答
-  if (toolId === 'qa') {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-gray-700">题目 1</label>
-          <div className="relative">
-            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="输入题目内容..." className="w-full min-h-[80px] p-4 pr-12 border border-gray-200 rounded-xl text-sm bg-white resize-none focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
-            <button className="absolute right-3 bottom-3 w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-orange-50 hover:text-orange-500" title="上传图片"><ImageIcon className="w-4 h-4" /></button>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-500">评价标准</label>
-          <textarea placeholder="设置评价标准，如:必须包括/避免..." className="w-full min-h-[60px] p-4 border border-gray-200 rounded-xl text-sm bg-white resize-none focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
-        </div>
-      </div>
-    );
-  }
-
-  // 投票
-  if (toolId === 'vote') {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-orange-500">投票主题</label>
-          <div className="relative">
-            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="输入投票主题..." className="w-full min-h-[80px] p-4 pr-12 border border-gray-200 rounded-xl text-sm bg-white resize-none focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
-            <button className="absolute right-3 bottom-3 w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 hover:bg-orange-50 hover:text-orange-500"><ImageIcon className="w-4 h-4" /></button>
-          </div>
-        </div>
-        <div className="space-y-3">
-          {options.map((opt, i) => (
-            <div key={i} className="relative group">
-              <input type="text" value={opt.text} onChange={(e) => { const n = [...options]; n[i].text = e.target.value; setOptions(n); }} placeholder={`选项${i + 1}`} className="w-full h-12 px-4 pr-10 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500" />
-              {options.length > 2 && <button onClick={() => setOptions(options.filter((_, j) => j !== i))} className="absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md flex items-center justify-center text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}
-            </div>
-          ))}
-          <button onClick={() => setOptions([...options, { text: '', isCorrect: false }])} className="w-full h-12 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-gray-400 flex items-center justify-center gap-2 hover:border-orange-500 hover:text-orange-500 hover:bg-orange-50">
-            <PlusIcon className="w-4 h-4" /><span>选项</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 拍照
-  if (toolId === 'photo') {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-orange-500">拍照指引</label>
-          <div className="relative">
-            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="输入拍照指引内容..." className="w-full min-h-[120px] p-4 pr-12 border-[1.5px] border-gray-200 rounded-[10px] text-sm bg-[#fafbfc] resize-y focus:outline-none focus:border-[#ff9500] focus:bg-white" />
-            <button className="absolute right-2 bottom-2 w-8 h-8 rounded-lg border-[1.5px] border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]"><ImageIcon className="w-4 h-4" /></button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 填空
-  if (toolId === 'fillblank') {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-semibold text-orange-500">题目 1</label>
-            <button onClick={() => setQuestion(question + '___')} className="h-7 px-3 rounded-lg border-[1.5px] border-dashed border-gray-300 text-xs font-medium text-gray-500 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]">+ 填空符</button>
-          </div>
-          <div className="relative">
-            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="输入题目内容，点击「填空符」插入空白..." className="w-full min-h-[80px] p-4 pr-12 border-[1.5px] border-gray-200 rounded-[10px] text-sm bg-[#fafbfc] resize-y focus:outline-none focus:border-[#ff9500] focus:bg-white" />
-            <button className="absolute right-2 bottom-2 w-8 h-8 rounded-lg border-[1.5px] border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]"><ImageIcon className="w-4 h-4" /></button>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-500">参考答案</label>
-          <input type="text" value={fillAnswer} onChange={(e) => setFillAnswer(e.target.value)} placeholder="按顺序输入答案，用逗号分隔..." className="w-full h-10 px-4 border-[1.5px] border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-[#ff9500]" />
-        </div>
-      </div>
-    );
-  }
-
-  // 排序
-  if (toolId === 'sort') {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-orange-500">排序项目</label>
-          <div className="space-y-2.5">
-            {sortItems.map((item, i) => (
-              <div key={item.id} className="flex items-center gap-3 p-1 rounded-lg group hover:bg-[#f9fafb]">
-                <span className="w-6 h-6 rounded-md bg-[#ff9500] text-white text-xs font-bold flex items-center justify-center flex-shrink-0">{i + 1}</span>
-                <input type="text" value={item.text} onChange={(e) => { const n = [...sortItems]; n[i].text = e.target.value; setSortItems(n); }} placeholder={`项目${i + 1}`} className="flex-1 h-10 px-3.5 border-[1.5px] border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:border-[#ff9500]" />
-                {sortItems.length > 2 && <button onClick={() => setSortItems(sortItems.filter((_, j) => j !== i))} className="w-6 h-6 rounded flex items-center justify-center text-gray-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-500"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-3.5 h-3.5"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>}
-              </div>
-            ))}
-            <button onClick={() => setSortItems([...sortItems, { id: sortItems.length + 1, text: '' }])} className="inline-flex items-center gap-2 h-8 px-3 ml-9 mt-2 border-[1.5px] border-dashed border-gray-300 rounded-lg text-xs font-medium text-gray-500 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]">
-              <PlusIcon className="w-3.5 h-3.5" /><span>项目</span>
-            </button>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-500">正确排序</label>
-          <div className="flex flex-wrap gap-2 p-4 bg-[#fafbfc] rounded-xl min-h-[60px]">
-            {sortItems.filter(item => item.text).map((item, i) => (
-              <div key={item.id} className="flex items-center gap-2 h-8 px-3 bg-white border border-gray-200 rounded-lg text-sm text-gray-700">
-                <span className="w-5 h-5 rounded bg-[#ff9500] text-white text-xs font-bold flex items-center justify-center">{i + 1}</span>
-                <span>{item.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 白板
-  if (toolId === 'whiteboard') {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-orange-500">白板主题</label>
-          <div className="relative">
-            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="输入白板主题..." className="w-full min-h-[120px] p-4 pr-12 border-[1.5px] border-gray-200 rounded-[10px] text-sm bg-[#fafbfc] resize-y focus:outline-none focus:border-[#ff9500] focus:bg-white" />
-            <button className="absolute right-2 bottom-2 w-8 h-8 rounded-lg border-[1.5px] border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]"><ImageIcon className="w-4 h-4" /></button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 抽认卡
-  if (toolId === 'flashcard') {
-    return (
-      <div className="space-y-6">
-        {flashcards.map((card, i) => (
-          <div key={card.id} className="p-4 bg-[#fafbfc] rounded-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-bold text-[#ff9500]">卡片 {i + 1}</span>
-              {flashcards.length > 1 && <button onClick={() => setFlashcards(flashcards.filter((_, j) => j !== i))} className="w-7 h-7 rounded-md flex items-center justify-center text-gray-400 hover:bg-red-50 hover:text-red-500"><TrashIcon className="w-4 h-4" /></button>}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-500">正面</label>
-                <div className="relative">
-                  <textarea value={card.front} onChange={(e) => { const n = [...flashcards]; n[i].front = e.target.value; setFlashcards(n); }} placeholder="输入正面内容..." className="w-full min-h-[80px] p-3 pr-10 border-[1.5px] border-gray-200 rounded-lg text-sm bg-white resize-none focus:outline-none focus:border-[#ff9500]" />
-                  <button className="absolute right-2 bottom-2 w-6 h-6 rounded border border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:border-[#ff9500] hover:text-[#ff9500]"><ImageIcon className="w-3 h-3" /></button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-gray-500">背面</label>
-                <div className="relative">
-                  <textarea value={card.back} onChange={(e) => { const n = [...flashcards]; n[i].back = e.target.value; setFlashcards(n); }} placeholder="输入背面内容..." className="w-full min-h-[80px] p-3 pr-10 border-[1.5px] border-gray-200 rounded-lg text-sm bg-white resize-none focus:outline-none focus:border-[#ff9500]" />
-                  <button className="absolute right-2 bottom-2 w-6 h-6 rounded border border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:border-[#ff9500] hover:text-[#ff9500]"><ImageIcon className="w-3 h-3" /></button>
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-        <button onClick={() => setFlashcards([...flashcards, { id: flashcards.length + 1, front: '', back: '' }])} className="w-full h-12 border-2 border-dashed border-gray-200 rounded-xl text-sm font-medium text-gray-400 flex items-center justify-center gap-2 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]">
-          <PlusIcon className="w-4 h-4" /><span>添加卡片</span>
-        </button>
-      </div>
-    );
-  }
-
-  // CocoPi
-  if (toolId === 'cocopi') {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-orange-500">任务描述</label>
-          <div className="relative">
-            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="输入CocoPi任务描述..." className="w-full min-h-[80px] p-4 pr-12 border-[1.5px] border-gray-200 rounded-[10px] text-sm bg-[#fafbfc] resize-y focus:outline-none focus:border-[#ff9500] focus:bg-white" />
-            <button className="absolute right-2 bottom-2 w-8 h-8 rounded-lg border-[1.5px] border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]"><ImageIcon className="w-4 h-4" /></button>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-500">CocoPi 编程</label>
-          <div className="w-full h-[160px] bg-[#1e1e1e] rounded-xl flex items-center justify-center">
-            <div className="text-center">
-              <CodeIcon className="w-10 h-10 text-gray-500 mx-auto mb-3" />
-              <p className="text-sm text-gray-400">CocoPi 编程界面</p>
-              <p className="text-xs text-gray-500 mt-1">拖拽积木块编写程序</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // 创作空间
-  if (toolId === 'workspace') {
-    return (
-      <div className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-semibold text-orange-500">任务描述</label>
-          <div className="relative">
-            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} placeholder="输入创作任务描述..." className="w-full min-h-[80px] p-4 pr-12 border-[1.5px] border-gray-200 rounded-[10px] text-sm bg-[#fafbfc] resize-y focus:outline-none focus:border-[#ff9500] focus:bg-white" />
-            <button className="absolute right-2 bottom-2 w-8 h-8 rounded-lg border-[1.5px] border-gray-200 bg-white flex items-center justify-center text-gray-400 hover:border-[#ff9500] hover:text-[#ff9500] hover:bg-[#fffbf5]"><ImageIcon className="w-4 h-4" /></button>
-          </div>
-        </div>
-        <div className="space-y-3">
-          <label className="text-sm font-medium text-gray-500">CocoFlow 创作空间</label>
-          <div className="w-full h-[160px] bg-gradient-to-br from-[#f0f9ff] to-[#e0f2fe] rounded-xl border-2 border-dashed border-[#7dd3fc] flex items-center justify-center">
-            <div className="text-center">
-              <LayersIcon className="w-10 h-10 text-[#38bdf8] mx-auto mb-3" />
-              <p className="text-sm text-[#0284c7]">CocoFlow 创作空间</p>
-              <p className="text-xs text-[#7dd3fc] mt-1">拖拽组件创建流程图</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // AI应用 - 默认
-  return (
-    <div className="text-center py-12 text-gray-400">
-      <div className="text-4xl mb-3">🚀</div>
-      <p className="text-sm">选择工具后可在此编辑内容</p>
-    </div>
-  );
-}
+import { CoursePage, TieredLevelConfig, LearningTask, TaskEvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle, AvatarConfig, VoiceConfig, BackgroundConfig } from '@/types';
 
 interface TieredTeachingEditorProps {
   page: CoursePage;
 }
 
 export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps) {
-  const { dispatchCourse, dispatchEditor, editorState } = useEditor();
-  const currentLevelIndex = editorState.tieredLevelIndex;
-  const setCurrentLevelIndex = (index: number) => {
-    dispatchEditor({ type: 'SET_TIERED_LEVEL_INDEX', payload: index });
-  };
+  const { dispatchCourse } = useEditor();
+  const [currentLevelIndex, setCurrentLevelIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<'tasks' | 'agent'>('tasks');
   const [isDebugMode, setIsDebugMode] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [isPromptExpanded, setIsPromptExpanded] = useState(true);
-
-  // 魔法棒动画状态
-  const [magicWandBlinking, setMagicWandBlinking] = useState(false);
-  const [showMagicTooltip, setShowMagicTooltip] = useState(false);
-
-  // 检测分层教学页面生成，触发魔法棒闪烁
-  useEffect(() => {
-    if (page.tieredTeachingData && !animatedPageIds.has(page.id)) {
-      animatedPageIds.add(page.id);
-      setMagicWandBlinking(true);
-      setShowMagicTooltip(true);
-      const wandTimer = setTimeout(() => {
-        setMagicWandBlinking(false);
-      }, 2000);
-      const tooltipTimer = setTimeout(() => {
-        setShowMagicTooltip(false);
-      }, 3000);
-      return () => {
-        clearTimeout(wandTimer);
-        clearTimeout(tooltipTimer);
-      };
-    }
-  }, [page.id, page.tieredTeachingData]);
 
   // 高级配置状态
   const [avatarImage, setAvatarImage] = useState('');
@@ -347,108 +38,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
     { id: 'female-cantonese', name: '女声粤语' },
   ];
 
-  // 互动工具/AI应用弹窗状态
-  const [toolModalTaskId, setToolModalTaskId] = useState<string | null>(null);
-  const [toolModalStep, setToolModalStep] = useState<'select' | 'config'>('select');
-  const [toolModalSelected, setToolModalSelected] = useState<{ type: 'tool' | 'app'; id: string; name: string } | null>(null);
-  // 工具配置状态
-  const [toolConfigViewWork, setToolConfigViewWork] = useState(false);
-  const [toolConfigShowAnswer, setToolConfigShowAnswer] = useState(false);
-  const [toolConfigVoting, setToolConfigVoting] = useState(false);
-
-  // 互动工具列表
-  const interactiveTools: { id: ToolType; name: string; icon: React.ReactNode }[] = [
-    { id: 'choice', name: '选择', icon: <CircleIcon className="w-5 h-5" /> },
-    { id: 'qa', name: '问答', icon: <MessageIcon className="w-5 h-5" /> },
-    { id: 'vote', name: '投票', icon: <CheckIcon className="w-5 h-5" /> },
-    { id: 'photo', name: '拍照', icon: <CameraIcon className="w-5 h-5" /> },
-    { id: 'fillblank', name: '填空', icon: <ListIcon className="w-5 h-5" /> },
-    { id: 'sort', name: '排序', icon: <MenuIcon className="w-5 h-5" /> },
-    { id: 'whiteboard', name: '白板', icon: <PenToolIcon className="w-5 h-5" /> },
-    { id: 'flashcard', name: '抽认卡', icon: <CardIcon className="w-5 h-5" /> },
-    { id: 'cocopi', name: 'CocoPi', icon: <CodeIcon className="w-5 h-5" /> },
-    { id: 'workspace', name: '创作空间', icon: <LayersIcon className="w-5 h-5" /> },
-  ];
-
-  // AI应用列表
-  const aiApps: { id: string; name: string; icon: React.ReactNode }[] = [
-    { id: 'app-center', name: '应用中心', icon: <GridIcon className="w-5 h-5" /> },
-    { id: 'create-app', name: '创建应用', icon: <PlusIcon className="w-5 h-5" /> },
-  ];
-
-  // 工具配置信息
-  const toolConfigInfo: Record<string, { hasViewWork: boolean; hasShowAnswer?: boolean; hasVoting?: boolean; hasLearningMode?: boolean }> = {
-    choice: { hasViewWork: true, hasShowAnswer: true },
-    qa: { hasViewWork: true, hasVoting: true },
-    vote: { hasViewWork: true },
-    photo: { hasViewWork: true, hasVoting: true },
-    fillblank: { hasViewWork: true },
-    sort: { hasViewWork: true },
-    whiteboard: { hasViewWork: true, hasVoting: true },
-    flashcard: { hasViewWork: false, hasLearningMode: true },
-    cocopi: { hasViewWork: true, hasVoting: true },
-    workspace: { hasViewWork: true, hasVoting: true },
-  };
-
-  // 获取工具图标
-  const getToolIcon = (toolId: string): React.ReactNode => {
-    const tool = interactiveTools.find(t => t.id === toolId);
-    if (tool) return tool.icon;
-    const app = aiApps.find(a => a.id === toolId);
-    if (app) return app.icon;
-    return null;
-  };
-
-  // 打开工具/应用选择弹窗
-  const openToolModal = (taskId: string) => {
-    setToolModalTaskId(taskId);
-    setToolModalStep('select');
-    setToolModalSelected(null);
-    setToolConfigViewWork(false);
-    setToolConfigShowAnswer(false);
-    setToolConfigVoting(false);
-  };
-
-  // 选择工具/应用后进入配置
-  const handleToolModalSelect = (type: 'tool' | 'app', id: string, name: string) => {
-    setToolModalSelected({ type, id, name });
-    setToolModalStep('config');
-    setToolConfigViewWork(false);
-    setToolConfigShowAnswer(false);
-    setToolConfigVoting(false);
-  };
-
-  // 确认配置并关联到任务
-  const handleToolModalConfirm = () => {
-    if (!toolModalTaskId || !toolModalSelected) return;
-    const attached: TaskAttachedTool = {
-      type: toolModalSelected.type,
-      toolId: toolModalSelected.id,
-      name: toolModalSelected.name,
-      config: {
-        viewWork: toolConfigViewWork,
-        showAnswer: toolConfigShowAnswer,
-        voting: toolConfigVoting,
-      },
-    };
-    updateLearningTask(toolModalTaskId, { attachedTool: attached });
-    setToolModalTaskId(null);
-  };
-
-  // 移除任务关联的工具
-  const removeAttachedTool = (taskId: string) => {
-    updateLearningTask(taskId, { attachedTool: undefined });
-  };
-
   const tieredData = page.tieredTeachingData;
-  const smartCompanionEnabled = tieredData?.smartCompanionEnabled !== false;
-
-  // 当智能学伴开关关闭时，自动切回学习任务tab
-  useEffect(() => {
-    if (!smartCompanionEnabled && activeTab === 'agent') {
-      setActiveTab('tasks');
-    }
-  }, [smartCompanionEnabled, activeTab]);
 
   if (!tieredData) {
     return (
@@ -461,11 +51,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
     );
   }
 
-  const safeIndex = Math.min(currentLevelIndex, tieredData.tieredConfigs.length - 1);
-  if (safeIndex !== currentLevelIndex) {
-    setCurrentLevelIndex(safeIndex);
-  }
-  const currentConfig = tieredData.tieredConfigs[safeIndex];
+  const currentConfig = tieredData.tieredConfigs[currentLevelIndex];
 
   // 同步 isAdvancedMode 状态
   useEffect(() => {
@@ -709,15 +295,11 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
             学习任务
           </button>
           <button
-            onClick={() => { if (smartCompanionEnabled) setActiveTab('agent'); }}
-            disabled={!smartCompanionEnabled}
-            title={!smartCompanionEnabled ? '请在侧边栏开启智能学伴设置' : ''}
+            onClick={() => setActiveTab('agent')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              !smartCompanionEnabled
-                ? 'text-gray-300 cursor-not-allowed'
-                : activeTab === 'agent'
-                  ? 'bg-primary-50 text-primary-700'
-                  : 'text-gray-600 hover:bg-gray-50'
+              activeTab === 'agent'
+                ? 'bg-primary-50 text-primary-700'
+                : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
             智能学伴配置
@@ -736,28 +318,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
         {activeTab === 'tasks' && (
           <div className="max-w-4xl mx-auto space-y-4">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <h3 className="text-lg font-semibold text-gray-900">学习任务</h3>
-                <button
-                  onClick={() => {
-                    setMagicWandBlinking(false);
-                    setShowMagicTooltip(false);
-                    dispatchEditor({ type: 'SET_ACTIVE_PANEL', payload: 'ai' });
-                  }}
-                  className="relative p-1.5 rounded-lg hover:bg-primary-50 transition-colors"
-                  title="Coco AI 辅助设计"
-                >
-                  <svg className={`w-5 h-5 text-primary-500 ${magicWandBlinking ? 'animate-magic-wand-blink' : ''}`} viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M7.5 5.6L5 7l1.4-2.5L5 2l2.5 1.4L10 2 8.6 4.5 10 7 7.5 5.6zm12 9.8L22 14l-1.4 2.5L22 19l-2.5-1.4L17 19l1.4-2.5L17 14l2.5 1.4zM22 2l-2.5 1.4L17 2l1.4 2.5L17 7l2.5-1.4L22 7l-1.4-2.5L22 2zM13.34 12.78l-2.12-2.12L2 19.88 4.12 22l9.22-9.22z" />
-                  </svg>
-                  {showMagicTooltip && (
-                    <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 whitespace-nowrap bg-gray-800/80 text-white text-xs px-3 py-2 rounded-lg shadow-lg z-50 animate-tooltip-fade-in">
-                      <div className="absolute right-full top-1/2 -translate-y-1/2 border-4 border-transparent" style={{ borderRightColor: 'rgba(31, 41, 55, 0.8)' }}></div>
-                      让Coco AI辅助你进行分层任务设计吧！
-                    </div>
-                  )}
-                </button>
-              </div>
+              <h3 className="text-lg font-semibold text-gray-900">学习任务</h3>
               <button
                 onClick={addLearningTask}
                 className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary-50 text-primary-600 hover:bg-primary-100 transition-colors"
@@ -770,7 +331,6 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                 return (
                   <div
                     key={task.id}
-                    id={`task-${currentLevelIndex}-${index}`}
                     className={`rounded-xl p-4 space-y-3 cursor-pointer transition-all border-2 ${
                       isSelected
                         ? 'bg-primary-50 border-primary-400 shadow-sm'
@@ -808,53 +368,6 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                       rows={3}
                       className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none bg-white"
                     />
-
-                    {/* 添加互动工具或AI应用 */}
-                    <div className="mt-3 pt-3 border-t border-gray-200">
-                      {task.attachedTool ? (
-                        <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-primary-50 border border-primary-200">
-                          <div className="w-8 h-8 rounded-lg bg-primary-100 flex items-center justify-center text-primary-600 flex-shrink-0">
-                            {getToolIcon(task.attachedTool.toolId)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-primary-700 truncate">{task.attachedTool.name}</div>
-                            <div className="text-xs text-primary-500">{task.attachedTool.type === 'tool' ? '互动工具' : 'AI应用'}</div>
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openToolModal(task.id);
-                            }}
-                            className="text-xs text-primary-500 hover:text-primary-700 font-medium"
-                          >
-                            更换
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeAttachedTool(task.id);
-                            }}
-                            className="text-xs text-red-400 hover:text-red-600 font-medium"
-                          >
-                            移除
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openToolModal(task.id);
-                          }}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 text-sm font-medium text-gray-500 hover:text-primary-600 hover:border-primary-400 hover:bg-primary-50 transition-all"
-                          title="添加互动工具或AI应用"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                          </svg>
-                          添加互动工具 / AI应用
-                        </button>
-                      )}
-                    </div>
 
                     {/* 评价标准部分 */}
                     <div className="mt-4 pt-4 border-t border-gray-200">
@@ -908,6 +421,19 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                                 rows={2}
                                 className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                               />
+                              <div className="flex items-center gap-2">
+                                <label className="text-xs text-gray-600">权重:</label>
+                                <input
+                                  type="number"
+                                  value={criteria.weight}
+                                  onChange={(e) => updateTaskEvaluationCriteria(task.id, criteria.id, { weight: parseInt(e.target.value) || 0 })}
+                                  onClick={(e) => e.stopPropagation()}
+                                  min="0"
+                                  max="100"
+                                  className="w-16 px-2 py-1 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                                />
+                                <span className="text-xs text-gray-600">%</span>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1418,198 +944,6 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
               <div className="text-4xl mb-3">🤖</div>
               <p>调试功能开发中...</p>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* 互动工具/AI应用选择弹窗 */}
-      {toolModalTaskId && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setToolModalTaskId(null)}>
-          <div
-            className={`bg-white rounded-2xl shadow-2xl w-full mx-4 max-h-[85vh] flex flex-col transition-all ${
-              toolModalStep === 'config' ? 'max-w-4xl' : 'max-w-xl'
-            }`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 弹窗头部 */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-shrink-0">
-              <div className="flex items-center gap-3">
-                {toolModalStep === 'config' && (
-                  <button
-                    onClick={() => { setToolModalStep('select'); setToolModalSelected(null); }}
-                    className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center hover:bg-gray-100 transition-colors"
-                  >
-                    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                )}
-                <h3 className="text-base font-semibold text-gray-900">
-                  {toolModalStep === 'select' ? '添加互动工具 / AI应用' : toolModalSelected?.name}
-                </h3>
-              </div>
-              <button
-                onClick={() => setToolModalTaskId(null)}
-                className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* 弹窗内容 */}
-            <div className="flex-1 overflow-y-auto">
-              {toolModalStep === 'select' ? (
-                <div className="p-6 space-y-6">
-                  {/* 互动工具 */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-primary-500"></span>
-                      互动工具
-                    </h4>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {interactiveTools.map((tool) => (
-                        <button
-                          key={tool.id}
-                          onClick={() => handleToolModalSelect('tool', tool.id, tool.name)}
-                          className="flex flex-col items-center gap-2 py-3 px-2 rounded-xl border border-gray-200 hover:border-primary-400 hover:bg-primary-50 transition-all group"
-                        >
-                          <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-primary-100 transition-colors">
-                            <span className="text-gray-500 group-hover:text-primary-600">{tool.icon}</span>
-                          </div>
-                          <span className="text-xs font-medium text-gray-600 group-hover:text-primary-700">{tool.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* AI应用 */}
-                  <div>
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
-                      AI应用
-                    </h4>
-                    <div className="grid grid-cols-3 gap-2.5">
-                      {aiApps.map((app) => (
-                        <button
-                          key={app.id}
-                          onClick={() => handleToolModalSelect('app', app.id, app.name)}
-                          className="flex flex-col items-center gap-2 py-3 px-2 rounded-xl border border-gray-200 hover:border-orange-400 hover:bg-orange-50 transition-all group"
-                        >
-                          <div className="w-9 h-9 rounded-lg bg-gray-50 flex items-center justify-center group-hover:bg-orange-100 transition-colors">
-                            <span className="text-gray-500 group-hover:text-orange-600">{app.icon}</span>
-                          </div>
-                          <span className="text-xs font-medium text-gray-600 group-hover:text-orange-700">{app.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                /* 配置视图 - 左右两栏 */
-                <div className="flex h-full">
-                  {/* 左侧：侧边栏配置 */}
-                  <div className="w-[260px] flex-shrink-0 border-r border-gray-100 p-5 overflow-y-auto">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-4">工具设置</h4>
-                    {toolModalSelected?.type === 'tool' && toolConfigInfo[toolModalSelected.id] ? (
-                      <div className="space-y-3">
-                        {toolConfigInfo[toolModalSelected.id].hasViewWork && (
-                          <div className="flex items-center justify-between py-2.5 px-3 bg-gray-50 rounded-xl">
-                            <span className="text-sm text-gray-700">学生查看结果</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={toolConfigViewWork}
-                                onChange={(e) => {
-                                  setToolConfigViewWork(e.target.checked);
-                                  if (!e.target.checked) setToolConfigVoting(false);
-                                }}
-                                className="sr-only peer"
-                              />
-                              <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
-                            </label>
-                          </div>
-                        )}
-                        {toolConfigInfo[toolModalSelected.id].hasShowAnswer && (
-                          <div className="flex items-center justify-between py-2.5 px-3 bg-gray-50 rounded-xl">
-                            <span className="text-sm text-gray-700">提交后显示答案</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={toolConfigShowAnswer}
-                                onChange={(e) => setToolConfigShowAnswer(e.target.checked)}
-                                className="sr-only peer"
-                              />
-                              <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
-                            </label>
-                          </div>
-                        )}
-                        {toolConfigInfo[toolModalSelected.id].hasVoting && (
-                          <div className="flex items-center justify-between py-2.5 px-3 bg-gray-50 rounded-xl">
-                            <span className="text-sm text-gray-700">学生点赞</span>
-                            <label className="relative inline-flex items-center cursor-pointer">
-                              <input
-                                type="checkbox"
-                                checked={toolConfigVoting}
-                                onChange={(e) => {
-                                  setToolConfigVoting(e.target.checked);
-                                  if (e.target.checked) setToolConfigViewWork(true);
-                                }}
-                                className="sr-only peer"
-                              />
-                              <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-500"></div>
-                            </label>
-                          </div>
-                        )}
-                        {toolConfigInfo[toolModalSelected.id].hasLearningMode && (
-                          <div className="space-y-2">
-                            <label className="text-sm font-medium text-gray-700">学习模式</label>
-                            <div className="space-y-1.5">
-                              {['随机乱序', '自动朗读', '正反对调'].map((mode, index) => (
-                                <label
-                                  key={mode}
-                                  className="flex items-center gap-2.5 py-2 px-3 bg-gray-50 rounded-xl cursor-pointer hover:bg-orange-50 transition-colors"
-                                >
-                                  <input
-                                    type="radio"
-                                    name="toolLearningMode"
-                                    defaultChecked={index === 0}
-                                    className="w-3.5 h-3.5 text-orange-500 border-gray-300 focus:ring-orange-500"
-                                  />
-                                  <span className="text-sm text-gray-700">{mode}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="text-center py-4 text-gray-400">
-                        <p className="text-sm">暂无额外配置</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* 右侧：主内容编辑区 */}
-                  <div className="flex-1 p-6 overflow-y-auto">
-                    <ToolContentEditor toolId={toolModalSelected?.id || ''} toolType={toolModalSelected?.type || 'tool'} />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 弹窗底部 - 配置步骤时显示确认按钮 */}
-            {toolModalStep === 'config' && (
-              <div className="px-6 py-4 border-t border-gray-100 flex-shrink-0 flex justify-end">
-                <button
-                  onClick={handleToolModalConfirm}
-                  className="px-8 py-2.5 rounded-xl text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors"
-                >
-                  确认添加
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}

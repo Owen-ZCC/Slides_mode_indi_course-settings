@@ -25,7 +25,8 @@ export type PageTemplateType =
   | 'image-text'
   | 'diagnosis'
   | 'conversation-diagnosis'
-  | 'tiered-teaching';
+  | 'tiered-teaching'
+  | 'placeholder';
 
 // 聊天消息
 export interface ChatMessage {
@@ -60,6 +61,7 @@ export interface CoursePage {
   diagnosisData?: DiagnosisPageData;
   conversationDiagnosisData?: ConversationDiagnosisPageData;
   tieredTeachingData?: TieredTeachingPageData; // 分层教学页面数据
+  placeholderFor?: 'diagnosis' | 'tiered-teaching'; // 占位页面等待替换的类型
 }
 
 // 大纲分组
@@ -125,6 +127,8 @@ export interface EditorState {
   editorMode: EditorMode;
   // 新增：当前工具类型（工具模式下使用）
   currentTool: ToolType | null;
+  // 分层教学当前选中的层级索引
+  tieredLevelIndex: number;
 }
 
 // 因材施教相关类型
@@ -247,12 +251,20 @@ export interface TaskEvaluationCriteria {
   weight: number;
 }
 
+export interface TaskAttachedTool {
+  type: 'tool' | 'app';
+  toolId: string; // ToolType for tools, app id for apps
+  name: string;
+  config?: Record<string, unknown>;
+}
+
 export interface LearningTask {
   id: string;
   title: string;
   description: string;
   resources?: string[];
   evaluationCriteria: TaskEvaluationCriteria[]; // 任务评价标准
+  attachedTool?: TaskAttachedTool; // 关联的互动工具或AI应用
 }
 
 export interface EvaluationCriteria {
@@ -309,4 +321,5 @@ export interface TieredTeachingPageData {
   lessonKnowledgePoints: KnowledgePoint[]; // 课时知识点
   studentLevels: StudentLevel[]; // 从认知起点诊断读取的分层（只读）
   tieredConfigs: TieredLevelConfig[]; // 每个分层的配置
+  smartCompanionEnabled?: boolean; // 智能学伴设置开关（默认true）
 }
