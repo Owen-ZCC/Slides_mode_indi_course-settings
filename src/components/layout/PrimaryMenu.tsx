@@ -37,19 +37,19 @@ export default function PrimaryMenu() {
           onClick={() => handleMenuClick(item.id)}
           className={`w-[84px] py-3 px-2 rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-all relative border-none ${
             editorState.activePanel === item.id
-              ? 'bg-emerald-50 shadow-[0_2px_8px_rgba(16,185,129,0.15)]'
+              ? 'bg-primary-50 shadow-[0_2px_8px_rgba(238,129,44,0.15)]'
               : 'bg-transparent hover:bg-gray-100'
           }`}
         >
           {/* 左侧指示条 */}
           {editorState.activePanel === item.id && (
-            <div className="absolute left-[-8px] top-1/2 -translate-y-1/2 w-1 h-8 bg-emerald-500 rounded-r" />
+            <div className="absolute left-[-8px] top-1/2 -translate-y-1/2 w-1 h-8 bg-primary-500 rounded-r" />
           )}
 
           <span
             className={`${
               editorState.activePanel === item.id
-                ? 'text-emerald-600'
+                ? 'text-primary-600'
                 : 'text-gray-500'
             }`}
           >
@@ -59,7 +59,7 @@ export default function PrimaryMenu() {
           <span
             className={`text-[11px] font-medium text-center leading-tight ${
               editorState.activePanel === item.id
-                ? 'text-emerald-600 font-semibold'
+                ? 'text-primary-600 font-semibold'
                 : 'text-gray-500'
             }`}
           >

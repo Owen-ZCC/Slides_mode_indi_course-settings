@@ -58,10 +58,10 @@ export default function PagesPanel({ onAddPage, onUploadPPT }: PagesPanelProps) 
             <button
               key={template.id}
               onClick={() => onAddPage(template.id)}
-              className="bg-[#fafbfc] border-[1.5px] border-gray-200 rounded-[14px] p-3.5 cursor-pointer transition-all duration-200 relative overflow-hidden hover:border-[#ff9500] hover:bg-[#fffbf5] hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(255,149,0,0.15)] group"
+              className="bg-[#fafbfc] border-[1.5px] border-gray-200 rounded-[14px] p-3.5 cursor-pointer transition-all duration-200 relative overflow-hidden hover:border-[#EE812C] hover:bg-[#FFF8F0] hover:-translate-y-0.5 hover:shadow-[0_4px_12px_rgba(238,129,44,0.15)] group"
             >
               <div className="w-full h-[100px] bg-white rounded-lg mb-3 flex items-center justify-center border border-gray-200 relative opacity-90 -translate-y-0.5 transition-all group-hover:opacity-100 group-hover:translate-y-0">
-                <span className="text-gray-300 group-hover:text-[#ff9500] transition-colors">
+                <span className="text-gray-300 group-hover:text-[#EE812C] transition-colors">
                   {template.icon}
                 </span>
               </div>
@@ -74,9 +74,9 @@ export default function PagesPanel({ onAddPage, onUploadPPT }: PagesPanelProps) 
           {/* 上传PPT */}
           <button
             onClick={handleUploadPPT}
-            className="col-span-2 bg-[#fafbfc] border-[1.5px] border-gray-200 flex items-center justify-center gap-3 p-3.5 rounded-[14px] cursor-pointer transition-all duration-200 hover:bg-[#fffbf5] hover:border-[#ff9500] hover:shadow-[0_4px_12px_rgba(255,149,0,0.15)] hover:-translate-y-0.5 group"
+            className="col-span-2 bg-[#fafbfc] border-[1.5px] border-gray-200 flex items-center justify-center gap-3 p-3.5 rounded-[14px] cursor-pointer transition-all duration-200 hover:bg-[#FFF8F0] hover:border-[#EE812C] hover:shadow-[0_4px_12px_rgba(238,129,44,0.15)] hover:-translate-y-0.5 group"
           >
-            <UploadIcon className="w-7 h-7 text-gray-300 group-hover:text-[#ff9500]" />
+            <UploadIcon className="w-7 h-7 text-gray-300 group-hover:text-[#EE812C]" />
             <span className="text-sm font-semibold text-gray-900">上传PPT</span>
           </button>
         </div>

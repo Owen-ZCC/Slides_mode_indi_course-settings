@@ -677,8 +677,22 @@ function WorkspaceEditor() {
 function DiagnosisPageEditor({ page }: { page: CoursePage }) {
   const { dispatchCourse } = useEditor();
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [isEditingQuestion, setIsEditingQuestion] = useState(false);
 
   const questions = page.diagnosisData?.questions || [];
+
+  // 更新单道题目
+  const updateQuestion = (questionId: string, updates: Partial<DiagnosisQuestion>) => {
+    if (!page.diagnosisData) return;
+    const updatedQuestions = page.diagnosisData.questions.map(q =>
+      q.id === questionId ? { ...q, ...updates } : q
+    );
+    const updatedPage: CoursePage = {
+      ...page,
+      diagnosisData: { ...page.diagnosisData, questions: updatedQuestions },
+    };
+    dispatchCourse({ type: 'UPDATE_PAGE', payload: updatedPage });
+  };
 
   // 获取难度名称
   const getDifficultyName = (difficulty: string) => {
@@ -729,14 +743,14 @@ function DiagnosisPageEditor({ page }: { page: CoursePage }) {
               key={question.id}
               className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
                 index === currentQuestionIndex
-                  ? 'border-emerald-500 bg-emerald-50'
+                  ? 'border-primary-500 bg-primary-50'
                   : 'border-gray-200 bg-white hover:border-gray-300'
               }`}
               onClick={() => setCurrentQuestionIndex(index)}
             >
               <div className="flex items-start gap-2">
                 <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium flex-shrink-0 ${
-                  index === currentQuestionIndex ? 'bg-emerald-500 text-white' : 'bg-gray-200 text-gray-600'
+                  index === currentQuestionIndex ? 'bg-primary-500 text-white' : 'bg-gray-200 text-gray-600'
                 }`}>
                   {index + 1}
                 </span>
@@ -747,8 +761,8 @@ function DiagnosisPageEditor({ page }: { page: CoursePage }) {
                       question.difficulty === 'hard' ? 'bg-rose-100 text-rose-600' :
                       question.difficulty === 'medium-hard' ? 'bg-orange-100 text-orange-600' :
                       question.difficulty === 'medium' ? 'bg-amber-100 text-amber-600' :
-                      question.difficulty === 'medium-easy' ? 'bg-teal-100 text-teal-600' :
-                      'bg-emerald-100 text-emerald-600'
+                      question.difficulty === 'medium-easy' ? 'bg-primary-100 text-primary-600' :
+                      'bg-primary-100 text-primary-600'
                     }`}>
                       {getDifficultyName(question.difficulty)}
                     </span>
@@ -761,7 +775,7 @@ function DiagnosisPageEditor({ page }: { page: CoursePage }) {
                   e.stopPropagation();
                   replaceQuestion(question.id);
                 }}
-                className="mt-2 w-full px-2 py-1 text-xs text-emerald-600 hover:bg-emerald-100 rounded-lg transition-colors"
+                className="mt-2 w-full px-2 py-1 text-xs text-primary-600 hover:bg-primary-100 rounded-lg transition-colors"
               >
                 换一道
               </button>
@@ -778,13 +792,13 @@ function DiagnosisPageEditor({ page }: { page: CoursePage }) {
               {/* 题目头部信息 */}
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold text-emerald-600">第 {currentQuestionIndex + 1} 题</span>
+                  <span className="text-xl font-bold text-primary-600">第 {currentQuestionIndex + 1} 题</span>
                   <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
                     questions[currentQuestionIndex].difficulty === 'hard' ? 'bg-rose-100 text-rose-700' :
                     questions[currentQuestionIndex].difficulty === 'medium-hard' ? 'bg-orange-100 text-orange-700' :
                     questions[currentQuestionIndex].difficulty === 'medium' ? 'bg-amber-100 text-amber-700' :
-                    questions[currentQuestionIndex].difficulty === 'medium-easy' ? 'bg-teal-100 text-teal-700' :
-                    'bg-emerald-100 text-emerald-700'
+                    questions[currentQuestionIndex].difficulty === 'medium-easy' ? 'bg-primary-100 text-primary-700' :
+                    'bg-primary-100 text-primary-700'
                   }`}>
                     {getDifficultyName(questions[currentQuestionIndex].difficulty)}
                   </span>
@@ -796,45 +810,132 @@ function DiagnosisPageEditor({ page }: { page: CoursePage }) {
                     {getQuestionTypeName(questions[currentQuestionIndex].type)}
                   </span>
                 </div>
-                <span className="text-xs text-gray-500">知识点：{questions[currentQuestionIndex].knowledgePoint}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-500">知识点：{questions[currentQuestionIndex].knowledgePoint}</span>
+                  <button
+                    onClick={() => setIsEditingQuestion(!isEditingQuestion)}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                      isEditingQuestion
+                        ? 'bg-primary-500 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                    {isEditingQuestion ? '完成' : '编辑'}
+                  </button>
+                </div>
               </div>
 
-              {/* 题目内容 */}
-              <div className="bg-gray-50 rounded-xl p-4 mb-4">
-                <h4 className="text-sm font-medium text-gray-900 mb-2">题目</h4>
-                <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">{questions[currentQuestionIndex].content}</p>
-              </div>
-
-              {/* 选项（单选/多选/判断） */}
-              {questions[currentQuestionIndex].options && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">选项</h4>
-                  <div className="space-y-2">
-                    {questions[currentQuestionIndex].options!.map((option: string, idx: number) => (
-                      <div key={idx} className="p-3 bg-white border border-gray-200 rounded-lg hover:border-emerald-300 transition-colors">
-                        <p className="text-sm text-gray-800">{option}</p>
-                      </div>
-                    ))}
+              {isEditingQuestion ? (
+                <>
+                  {/* 编辑模式 - 题目内容 */}
+                  <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">题目</h4>
+                    <textarea
+                      value={questions[currentQuestionIndex].content}
+                      onChange={(e) => updateQuestion(questions[currentQuestionIndex].id, { content: e.target.value })}
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                    />
                   </div>
-                </div>
-              )}
 
-              {/* 答案 */}
-              <div className="bg-emerald-50 rounded-xl p-4 mb-4">
-                <h4 className="text-sm font-medium text-emerald-800 mb-2">参考答案</h4>
-                <p className="text-sm text-emerald-700 font-medium">
-                  {Array.isArray(questions[currentQuestionIndex].answer)
-                    ? questions[currentQuestionIndex].answer.join('、')
-                    : questions[currentQuestionIndex].answer}
-                </p>
-              </div>
+                  {/* 编辑模式 - 选项 */}
+                  {questions[currentQuestionIndex].options && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-900 mb-2">选项</h4>
+                      <div className="space-y-2">
+                        {questions[currentQuestionIndex].options!.map((option: string, idx: number) => (
+                          <input
+                            key={idx}
+                            type="text"
+                            value={option}
+                            onChange={(e) => {
+                              const newOptions = [...questions[currentQuestionIndex].options!];
+                              newOptions[idx] = e.target.value;
+                              updateQuestion(questions[currentQuestionIndex].id, { options: newOptions });
+                            }}
+                            className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-              {/* 解析 */}
-              {questions[currentQuestionIndex].analysis && (
-                <div className="bg-blue-50 rounded-xl p-4">
-                  <h4 className="text-sm font-medium text-blue-800 mb-2">解析</h4>
-                  <p className="text-sm text-blue-700 leading-relaxed">{questions[currentQuestionIndex].analysis}</p>
-                </div>
+                  {/* 编辑模式 - 答案 */}
+                  <div className="bg-primary-50 rounded-xl p-4 mb-4">
+                    <h4 className="text-sm font-medium text-primary-800 mb-2">参考答案</h4>
+                    <input
+                      type="text"
+                      value={Array.isArray(questions[currentQuestionIndex].answer)
+                        ? questions[currentQuestionIndex].answer.join('、')
+                        : questions[currentQuestionIndex].answer}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const q = questions[currentQuestionIndex];
+                        if (q.type === 'multiple') {
+                          updateQuestion(q.id, { answer: val.split('、').map(s => s.trim()).filter(Boolean) });
+                        } else {
+                          updateQuestion(q.id, { answer: val });
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-lg border border-primary-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
+
+                  {/* 编辑模式 - 解析 */}
+                  <div className="bg-blue-50 rounded-xl p-4">
+                    <h4 className="text-sm font-medium text-blue-800 mb-2">解析</h4>
+                    <textarea
+                      value={questions[currentQuestionIndex].analysis || ''}
+                      onChange={(e) => updateQuestion(questions[currentQuestionIndex].id, { analysis: e.target.value })}
+                      rows={3}
+                      className="w-full px-3 py-2 rounded-lg border border-blue-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none"
+                    />
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* 展示模式 - 题目内容 */}
+                  <div className="bg-gray-50 rounded-xl p-4 mb-4">
+                    <h4 className="text-sm font-medium text-gray-900 mb-2">题目</h4>
+                    <p className="text-sm text-gray-800 leading-relaxed whitespace-pre-line">{questions[currentQuestionIndex].content}</p>
+                  </div>
+
+                  {/* 展示模式 - 选项 */}
+                  {questions[currentQuestionIndex].options && (
+                    <div className="mb-4">
+                      <h4 className="text-sm font-medium text-gray-900 mb-2">选项</h4>
+                      <div className="space-y-2">
+                        {questions[currentQuestionIndex].options!.map((option: string, idx: number) => (
+                          <div key={idx} className="p-3 bg-white border border-gray-200 rounded-lg hover:border-primary-300 transition-colors">
+                            <p className="text-sm text-gray-800">{option}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 展示模式 - 答案 */}
+                  <div className="bg-primary-50 rounded-xl p-4 mb-4">
+                    <h4 className="text-sm font-medium text-primary-800 mb-2">参考答案</h4>
+                    <p className="text-sm text-primary-700 font-medium">
+                      {Array.isArray(questions[currentQuestionIndex].answer)
+                        ? questions[currentQuestionIndex].answer.join('、')
+                        : questions[currentQuestionIndex].answer}
+                    </p>
+                  </div>
+
+                  {/* 展示模式 - 解析 */}
+                  {questions[currentQuestionIndex].analysis && (
+                    <div className="bg-blue-50 rounded-xl p-4">
+                      <h4 className="text-sm font-medium text-blue-800 mb-2">解析</h4>
+                      <p className="text-sm text-blue-700 leading-relaxed">{questions[currentQuestionIndex].analysis}</p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -848,7 +949,7 @@ function DiagnosisPageEditor({ page }: { page: CoursePage }) {
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               currentQuestionIndex === 0
                 ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+                : 'text-primary-600 bg-primary-50 hover:bg-primary-100'
             }`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -867,7 +968,7 @@ function DiagnosisPageEditor({ page }: { page: CoursePage }) {
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               currentQuestionIndex === questions.length - 1
                 ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100'
+                : 'text-primary-600 bg-primary-50 hover:bg-primary-100'
             }`}
           >
             下一道
@@ -1123,7 +1224,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                   disabled={!selectedAnswer}
                   className={`mt-6 w-full py-3 rounded-xl font-medium transition-all ${
                     selectedAnswer
-                      ? 'bg-emerald-500 text-white hover:bg-emerald-600'
+                      ? 'bg-primary-500 text-white hover:bg-primary-600'
                       : 'bg-gray-500 text-gray-300 cursor-not-allowed'
                   }`}
                 >
@@ -1139,7 +1240,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[80%] p-4 rounded-2xl ${
                         msg.role === 'user'
-                          ? 'bg-emerald-500 text-white'
+                          ? 'bg-primary-500 text-white'
                           : 'bg-white/90 text-gray-900'
                       }`}>
                         {msg.role === 'ai' && (
@@ -1192,7 +1293,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                   </button>
                   <button
                     onClick={handleSendMessage}
-                    className="px-4 py-1.5 bg-emerald-500 text-white text-sm rounded-lg hover:bg-emerald-600 transition-colors"
+                    className="px-4 py-1.5 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 transition-colors"
                   >
                     发送
                   </button>
@@ -1214,7 +1315,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
             onClick={() => setIsAdvancedMode(false)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               !isAdvancedMode
-                ? 'bg-emerald-500 text-white'
+                ? 'bg-primary-500 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -1224,7 +1325,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
             onClick={() => setIsAdvancedMode(true)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               isAdvancedMode
-                ? 'bg-emerald-500 text-white'
+                ? 'bg-primary-500 text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
@@ -1257,7 +1358,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                 value={aiRole}
                 onChange={(e) => setAiRole(e.target.value)}
                 placeholder="例如：专业学科教师"
-                className="w-full h-11 px-4 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full h-11 px-4 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
@@ -1271,11 +1372,11 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                     onClick={() => setDialogueStyle(option.value)}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${
                       dialogueStyle === option.value
-                        ? 'border-emerald-500 bg-emerald-50'
+                        ? 'border-primary-500 bg-primary-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <div className={`text-sm font-medium ${dialogueStyle === option.value ? 'text-emerald-700' : 'text-gray-900'}`}>
+                    <div className={`text-sm font-medium ${dialogueStyle === option.value ? 'text-primary-700' : 'text-gray-900'}`}>
                       {option.label}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">{option.desc}</div>
@@ -1294,11 +1395,11 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                     onClick={() => setScoringPreference(option.value)}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${
                       scoringPreference === option.value
-                        ? 'border-emerald-500 bg-emerald-50'
+                        ? 'border-primary-500 bg-primary-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <div className={`text-sm font-medium ${scoringPreference === option.value ? 'text-emerald-700' : 'text-gray-900'}`}>
+                    <div className={`text-sm font-medium ${scoringPreference === option.value ? 'text-primary-700' : 'text-gray-900'}`}>
                       {option.label}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">{option.desc}</div>
@@ -1317,11 +1418,11 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                     onClick={() => setEncouragementStyle(option.value)}
                     className={`p-4 rounded-xl border-2 text-left transition-all ${
                       encouragementStyle === option.value
-                        ? 'border-emerald-500 bg-emerald-50'
+                        ? 'border-primary-500 bg-primary-50'
                         : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
-                    <div className={`text-sm font-medium ${encouragementStyle === option.value ? 'text-emerald-700' : 'text-gray-900'}`}>
+                    <div className={`text-sm font-medium ${encouragementStyle === option.value ? 'text-primary-700' : 'text-gray-900'}`}>
                       {option.label}
                     </div>
                     <div className="text-xs text-gray-500 mt-1">{option.desc}</div>
@@ -1334,7 +1435,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-sm font-semibold text-gray-900">最大对话轮次</label>
-                <span className="text-sm font-medium text-emerald-600">{maxRounds}轮</span>
+                <span className="text-sm font-medium text-primary-600">{maxRounds}轮</span>
               </div>
               <input
                 type="range"
@@ -1342,7 +1443,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                 max="10"
                 value={maxRounds}
                 onChange={(e) => setMaxRounds(parseInt(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500"
               />
               <div className="flex justify-between text-xs text-gray-400">
                 <span>1轮</span>
@@ -1358,7 +1459,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
                 onChange={(e) => setSpecialFocus(e.target.value)}
                 placeholder="例如：重点关注学生对物质状态变化的理解..."
                 rows={3}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
           </div>
@@ -1392,13 +1493,13 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
               <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
                 <button
                   onClick={() => setCustomPrompt(defaultPrompt)}
-                  className="text-sm text-emerald-600 hover:text-emerald-700"
+                  className="text-sm text-primary-600 hover:text-primary-700"
                 >
                   重置为默认
                 </button>
                 <button
                   onClick={() => setIsPromptExpanded(false)}
-                  className="px-4 py-1.5 bg-emerald-500 text-white text-sm rounded-lg hover:bg-emerald-600 transition-colors"
+                  className="px-4 py-1.5 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 transition-colors"
                 >
                   完成编辑
                 </button>
@@ -1659,7 +1760,7 @@ function ConversationDiagnosisEditor({ page }: { page: CoursePage }) {
         <div className="max-w-2xl mx-auto">
           <button
             onClick={saveConfig}
-            className="w-full h-11 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold hover:from-emerald-600 hover:to-teal-600 transition-colors"
+            className="w-full h-11 rounded-xl bg-gradient-to-r from-primary-500 to-primary-400 text-white text-sm font-semibold hover:from-primary-600 hover:to-primary-500 transition-colors"
           >
             保存配置
           </button>
@@ -2138,7 +2239,7 @@ export default function CenterEditor() {
                       ? 'border-blue-500 bg-blue-50 shadow-[0_0_0_2px_rgba(59,130,246,0.2)]'
                       : isSelected
                         ? isSpecialPage
-                          ? 'border-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.1)]'
+                          ? 'border-primary-500 shadow-[0_0_0_2px_rgba(238,129,44,0.1)]'
                           : 'border-orange-500 shadow-[0_0_0_2px_rgba(255,149,0,0.1)]'
                         : isSpecialPage
                           ? 'border-gray-200 hover:border-gray-300 hover:-translate-y-0.5 hover:shadow-[0_4px_8px_rgba(0,0,0,0.08)]'
@@ -2174,7 +2275,7 @@ export default function CenterEditor() {
                     >
                       <TrashIcon className="w-4 h-4" />
                     </button>
-                    <span className={`text-sm ${isSelected ? (isSpecialPage ? 'text-emerald-600 font-medium' : 'text-orange-600 font-medium') : 'text-gray-500'}`}>
+                    <span className={`text-sm ${isSelected ? (isSpecialPage ? 'text-primary-600 font-medium' : 'text-orange-600 font-medium') : 'text-gray-500'}`}>
                       {page.title}
                     </span>
                   </div>

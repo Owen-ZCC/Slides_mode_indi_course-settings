@@ -67,7 +67,7 @@ export default function DifferentiatedPanel() {
     { id: 'perf-3', name: '基本达标', icon: '📈', color: 'amber', minScore: 60, maxScore: 74, description: '基本完成学习任务，掌握核心内容' },
     { id: 'perf-4', name: '需要加强', icon: '💪', color: 'rose', minScore: 0, maxScore: 59, description: '学习任务完成度不足，需要额外辅导' },
   ]);
-  const [editingPerformanceLevelId, setEditingPerformanceLevelId] = useState<string | null>(null);
+  const [expandedPerformanceLevelId, setExpandedPerformanceLevelId] = useState<string | null>(null);
 
   // 生成新的配置组ID
   const generateConfigGroupId = () => `config-group-${Date.now()}`;
@@ -1228,9 +1228,9 @@ export default function DifferentiatedPanel() {
               </p>
               {/* 进度条 */}
               <div className="flex items-center gap-1.5">
-                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 1 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
-                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 2 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
-                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 3 ? 'bg-emerald-500' : 'bg-gray-200'}`}></div>
+                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 1 ? 'bg-primary-500' : 'bg-gray-200'}`}></div>
+                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 2 ? 'bg-primary-500' : 'bg-gray-200'}`}></div>
+                <div className={`flex-1 h-1 rounded-full transition-all ${importStep >= 3 ? 'bg-primary-500' : 'bg-gray-200'}`}></div>
               </div>
             </div>
 
@@ -1243,7 +1243,7 @@ export default function DifferentiatedPanel() {
                     <button
                       key={subject}
                       onClick={() => handleImportSelectSubject(subject)}
-                      className="bg-gray-50 rounded-xl p-3 hover:bg-emerald-50 hover:border-emerald-300 border-2 border-transparent transition-all text-left"
+                      className="bg-gray-50 rounded-xl p-3 hover:bg-primary-50 hover:border-primary-300 border-2 border-transparent transition-all text-left"
                     >
                       <div className="text-2xl mb-1">{subjectIcons[subject] || '📖'}</div>
                       <div className="text-sm font-semibold text-gray-900">{subject}</div>
@@ -1257,14 +1257,14 @@ export default function DifferentiatedPanel() {
                 <div>
                   <div className="text-center mb-3">
                     <span className="text-xs text-gray-500">已选学科：</span>
-                    <span className="ml-1 text-sm font-semibold text-emerald-600">{selectedSubject}</span>
+                    <span className="ml-1 text-sm font-semibold text-primary-600">{selectedSubject}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {grades.map((grade) => (
                       <button
                         key={grade}
                         onClick={() => handleImportSelectGrade(grade)}
-                        className="bg-gray-50 rounded-xl p-3 hover:bg-emerald-50 hover:border-emerald-300 border-2 border-transparent transition-all text-left"
+                        className="bg-gray-50 rounded-xl p-3 hover:bg-primary-50 hover:border-primary-300 border-2 border-transparent transition-all text-left"
                       >
                         <div className="text-xl mb-1">🎓</div>
                         <div className="text-sm font-semibold text-gray-900">{grade}</div>
@@ -1279,9 +1279,9 @@ export default function DifferentiatedPanel() {
                 <div>
                   <div className="text-center mb-3">
                     <span className="text-xs text-gray-500">已选：</span>
-                    <span className="ml-1 text-sm font-semibold text-emerald-600">{selectedSubject}</span>
+                    <span className="ml-1 text-sm font-semibold text-primary-600">{selectedSubject}</span>
                     <span className="mx-1 text-gray-400">·</span>
-                    <span className="text-sm font-semibold text-teal-600">{selectedGrade}</span>
+                    <span className="text-sm font-semibold text-primary-600">{selectedGrade}</span>
                   </div>
 
                   {lessonChapters.length > 0 ? (
@@ -1291,14 +1291,14 @@ export default function DifferentiatedPanel() {
                         return (
                           <div
                             key={chapterData.chapter}
-                            className="border border-gray-200 rounded-xl overflow-hidden transition-all hover:border-emerald-300"
+                            className="border border-gray-200 rounded-xl overflow-hidden transition-all hover:border-primary-300"
                           >
                             <button
                               onClick={() => toggleImportChapter(chapterData.chapter)}
-                              className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-emerald-50 transition-all"
+                              className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-primary-50 transition-all"
                             >
                               <div className="flex items-center gap-2">
-                                <div className={`w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-600 text-xs font-bold transition-transform ${isExpanded ? 'scale-110' : ''}`}>
+                                <div className={`w-7 h-7 rounded-lg bg-primary-100 flex items-center justify-center text-primary-600 text-xs font-bold transition-transform ${isExpanded ? 'scale-110' : ''}`}>
                                   {chapterIndex + 1}
                                 </div>
                                 <span className="font-medium text-gray-900 text-sm text-left">{chapterData.chapter}</span>
@@ -1321,21 +1321,21 @@ export default function DifferentiatedPanel() {
                                       onClick={() => handleImportSelectLesson(lesson)}
                                       className={`w-full text-left p-3 rounded-lg border transition-all ${
                                         isSelected
-                                          ? 'border-emerald-400 bg-emerald-50'
-                                          : 'border-gray-200 hover:border-emerald-200 bg-white'
+                                          ? 'border-primary-400 bg-primary-50'
+                                          : 'border-gray-200 hover:border-primary-200 bg-white'
                                       }`}
                                     >
                                       <div className="flex items-center gap-2">
                                         <div className={`w-6 h-6 rounded-md flex items-center justify-center text-xs font-semibold ${
-                                          isSelected ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600'
+                                          isSelected ? 'bg-primary-500 text-white' : 'bg-gray-100 text-gray-600'
                                         }`}>
                                           {lesson.order}
                                         </div>
-                                        <span className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-gray-700'}`}>
+                                        <span className={`text-sm font-medium ${isSelected ? 'text-primary-700' : 'text-gray-700'}`}>
                                           {lesson.name}
                                         </span>
                                         {isSelected && (
-                                          <svg className="w-4 h-4 text-emerald-500 ml-auto" fill="currentColor" viewBox="0 0 24 24">
+                                          <svg className="w-4 h-4 text-primary-500 ml-auto" fill="currentColor" viewBox="0 0 24 24">
                                             <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
                                           </svg>
                                         )}
@@ -1374,7 +1374,7 @@ export default function DifferentiatedPanel() {
                 disabled={!selectedLesson}
                 className={`flex items-center gap-1 h-9 px-4 rounded-lg text-sm font-semibold transition-all ${
                   selectedLesson
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600'
+                    ? 'bg-gradient-to-r from-primary-500 to-primary-400 text-white hover:from-primary-600 hover:to-primary-500'
                     : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
               >
@@ -1420,7 +1420,7 @@ export default function DifferentiatedPanel() {
                           value={point.name}
                           onChange={(e) => handleUpdateKnowledgePoint(point.id, e.target.value)}
                           placeholder="输入知识点名称"
-                          className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         />
                         <button
                           onClick={() => handleDeleteKnowledgePoint(point.id)}
@@ -1436,7 +1436,7 @@ export default function DifferentiatedPanel() {
                   </div>
                   <button
                     onClick={handleAddKnowledgePoint}
-                    className="mt-3 text-sm text-emerald-600 font-medium hover:text-emerald-700"
+                    className="mt-3 text-sm text-primary-600 font-medium hover:text-primary-700"
                   >
                     + 添加知识点
                   </button>
@@ -1448,82 +1448,35 @@ export default function DifferentiatedPanel() {
                     <span className="text-xl">🏷️</span>
                     <div className="flex-1">
                       <div className="text-sm font-semibold text-gray-900">认知起点分层</div>
-                      <div className="text-xs text-gray-500">配置分层等级和分数段</div>
+                      <div className="text-xs text-gray-500">配置分层等级类目</div>
                     </div>
                   </div>
-                  <div className="space-y-3">
-                    {studentLevels.map((level) => {
-                      const isEditing = editingLevelId === level.id;
-                      return (
-                        <div
-                          key={level.id}
-                          className={`rounded-lg p-3 transition-all cursor-pointer ${
-                            isEditing
-                              ? 'bg-emerald-50 shadow-sm'
-                              : 'hover:bg-gray-100'
-                          }`}
-                          onClick={() => setEditingLevelId(level.id)}
+                  <div className="space-y-2">
+                    {studentLevels.map((level) => (
+                      <div key={level.id} className="flex items-center gap-2">
+                        <span className="text-lg">{level.icon}</span>
+                        <input
+                          type="text"
+                          value={level.name}
+                          onChange={(e) => handleUpdateLevel(level.id, { name: e.target.value })}
+                          placeholder="输入分层名称"
+                          className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                        />
+                        <button
+                          onClick={() => handleDeleteLevel(level.id)}
+                          className="p-2 rounded-lg hover:bg-gray-200 transition-colors"
                         >
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">{level.icon}</span>
-                            <input
-                              type="text"
-                              value={level.name}
-                              onChange={(e) => handleUpdateLevel(level.id, { name: e.target.value })}
-                              onFocus={() => setEditingLevelId(level.id)}
-                              className="flex-1 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <input
-                              type="number"
-                              value={level.minScore}
-                              onChange={(e) => handleUpdateLevel(level.id, { minScore: parseInt(e.target.value) })}
-                              onFocus={() => setEditingLevelId(level.id)}
-                              min="0"
-                              max="100"
-                              className="w-16 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            />
-                            <span className="text-sm text-gray-600">-</span>
-                            <input
-                              type="number"
-                              value={level.maxScore}
-                              onChange={(e) => handleUpdateLevel(level.id, { maxScore: parseInt(e.target.value) })}
-                              onFocus={() => setEditingLevelId(level.id)}
-                              min="0"
-                              max="100"
-                              className="w-16 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                            />
-                            <span className="text-sm text-gray-600">分</span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteLevel(level.id);
-                              }}
-                              className="ml-auto p-1 rounded hover:bg-gray-200 transition-colors"
-                            >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                <line x1="6" y1="6" x2="18" y2="18"/>
-                              </svg>
-                            </button>
-                          </div>
-                          <textarea
-                            value={level.description || ''}
-                            onChange={(e) => handleUpdateLevel(level.id, { description: e.target.value })}
-                            onClick={(e) => e.stopPropagation()}
-                            onFocus={() => setEditingLevelId(level.id)}
-                            placeholder="分层描述（选填）"
-                            rows={2}
-                            className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 resize-none"
-                          />
-                        </div>
-                      );
-                    })}
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                   <button
                     onClick={handleAddLevel}
-                    className="mt-3 text-sm text-emerald-600 font-medium hover:text-emerald-700"
+                    className="mt-3 text-sm text-primary-600 font-medium hover:text-primary-700"
                   >
                     + 添加等级
                   </button>
@@ -1563,7 +1516,7 @@ export default function DifferentiatedPanel() {
                               }}
                               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                                 isSelected
-                                  ? 'bg-emerald-500 text-white'
+                                  ? 'bg-primary-500 text-white'
                                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                               }`}
                             >
@@ -1598,7 +1551,7 @@ export default function DifferentiatedPanel() {
                                     [diffId]: Math.max(0, parseInt(e.target.value) || 0)
                                   }))}
                                   min="0"
-                                  className="flex-1 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                  className="flex-1 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500"
                                 />
                                 <span className="text-xs text-gray-600 shrink-0">题</span>
                               </div>
@@ -1610,7 +1563,7 @@ export default function DifferentiatedPanel() {
                   </div>
                   <button
                     onClick={handleGenerateTestPage}
-                    className="w-full h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-sm font-semibold hover:from-emerald-600 hover:to-teal-600 transition-colors"
+                    className="w-full h-10 rounded-xl bg-gradient-to-r from-primary-500 to-primary-400 text-white text-sm font-semibold hover:from-primary-600 hover:to-primary-500 transition-colors"
                   >
                     {boundPageId ? '更新页面' : '生成页面'}
                   </button>
@@ -1631,7 +1584,7 @@ export default function DifferentiatedPanel() {
                         onChange={(e) => handleConversationToggle(e.target.checked)}
                         className="sr-only peer"
                       />
-                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-emerald-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-500"></div>
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-500"></div>
                     </label>
                   </div>
                   <p className="mt-3 text-sm text-gray-600">开启后将自动创建对话诊断页面,请在右侧完成配置。</p>
@@ -1669,7 +1622,7 @@ export default function DifferentiatedPanel() {
                           value={point.name}
                           onChange={(e) => handleUpdateTieredKnowledgePoint(point.id, e.target.value)}
                           placeholder="输入知识点名称"
-                          className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="flex-1 h-9 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         />
                         <button
                           onClick={() => handleDeleteTieredKnowledgePoint(point.id)}
@@ -1685,53 +1638,13 @@ export default function DifferentiatedPanel() {
                   </div>
                   <button
                     onClick={handleAddTieredKnowledgePoint}
-                    className="mt-3 text-sm text-teal-600 font-medium hover:text-teal-700"
+                    className="mt-3 text-sm text-primary-600 font-medium hover:text-primary-700"
                   >
                     + 添加知识点
                   </button>
                 </div>
 
-                {/* 2. 认知起点分层（只读） */}
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <div className="flex items-start gap-2 mb-3">
-                    <span className="text-xl">🏷️</span>
-                    <div className="flex-1">
-                      <div className="text-sm font-semibold text-gray-900">认知起点分层</div>
-                      <div className="text-xs text-gray-500">来自认知起点诊断配置（不可编辑）</div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    {studentLevels.map((level) => {
-                      const colorMap: Record<string, string> = {
-                        emerald: 'bg-emerald-100 border-emerald-300 text-emerald-700',
-                        teal: 'bg-teal-100 border-teal-300 text-teal-700',
-                        amber: 'bg-amber-100 border-amber-300 text-amber-700',
-                        rose: 'bg-rose-100 border-rose-300 text-rose-700',
-                        gray: 'bg-gray-100 border-gray-300 text-gray-700',
-                      };
-                      const colorClass = colorMap[level.colorClass] || colorMap.gray;
-                      return (
-                        <div
-                          key={level.id}
-                          className={`rounded-lg p-3 border ${colorClass}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="text-lg">{level.icon}</span>
-                            <span className="font-medium text-sm">{level.name}</span>
-                            <span className="ml-auto text-xs opacity-75">{level.minScore}-{level.maxScore}分</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {studentLevels.length === 0 && (
-                    <div className="text-center py-4 text-gray-400 text-sm">
-                      请先完成认知起点诊断配置
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. 学习表现等级（可编辑） */}
+                {/* 2. 学习表现等级（可编辑） */}
                 <div className="bg-gray-50 rounded-xl p-4">
                   <div className="flex items-start gap-2 mb-3">
                     <span className="text-xl">🏅</span>
@@ -1740,67 +1653,31 @@ export default function DifferentiatedPanel() {
                       <div className="text-xs text-gray-500">配置学习任务完成后的评价等级</div>
                     </div>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {performanceLevels.map((level) => {
-                      const isEditing = editingPerformanceLevelId === level.id;
-                      const colorMap: Record<string, string> = {
-                        emerald: 'bg-emerald-50 border-emerald-300',
-                        blue: 'bg-blue-50 border-blue-300',
-                        amber: 'bg-amber-50 border-amber-300',
-                        rose: 'bg-rose-50 border-rose-300',
-                        gray: 'bg-gray-50 border-gray-300',
-                      };
-                      const colorClass = colorMap[level.color] || colorMap.gray;
+                      const isExpanded = expandedPerformanceLevelId === level.id;
                       return (
-                        <div
-                          key={level.id}
-                          className={`rounded-lg p-3 transition-all cursor-pointer border ${
-                            isEditing
-                              ? `${colorClass} shadow-sm`
-                              : 'border-gray-200 hover:bg-gray-100'
-                          }`}
-                          onClick={() => setEditingPerformanceLevelId(level.id)}
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-lg">{level.icon}</span>
+                        <div key={level.id}>
+                          <div className="flex items-center gap-2">
                             <input
                               type="text"
                               value={level.name}
                               onChange={(e) => handleUpdatePerformanceLevel(level.id, { name: e.target.value })}
-                              onFocus={() => setEditingPerformanceLevelId(level.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex-1 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            />
-                          </div>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs text-gray-600">最低分:</span>
-                            <input
-                              type="number"
-                              value={level.minScore}
-                              onChange={(e) => handleUpdatePerformanceLevel(level.id, { minScore: parseInt(e.target.value) || 0 })}
-                              onFocus={() => setEditingPerformanceLevelId(level.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              min="0"
-                              max="100"
-                              className="w-14 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-                            />
-                            <span className="text-xs text-gray-600">最高分:</span>
-                            <input
-                              type="number"
-                              value={level.maxScore}
-                              onChange={(e) => handleUpdatePerformanceLevel(level.id, { maxScore: parseInt(e.target.value) || 0 })}
-                              onFocus={() => setEditingPerformanceLevelId(level.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              min="0"
-                              max="100"
-                              className="w-14 h-8 px-2 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500"
+                              placeholder="输入等级名称"
+                              className="flex-1 min-w-0 h-9 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                             />
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeletePerformanceLevel(level.id);
-                              }}
-                              className="ml-auto p-1 rounded hover:bg-gray-200 transition-colors"
+                              onClick={() => setExpandedPerformanceLevelId(isExpanded ? null : level.id)}
+                              className={`p-1.5 rounded-lg transition-colors shrink-0 ${isExpanded ? 'text-primary-600' : 'text-gray-400 hover:text-gray-500'}`}
+                              title={isExpanded ? '收起描述' : '展开描述'}
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className={`transition-transform ${isExpanded ? 'rotate-180' : ''}`}>
+                                <polyline points="6 9 12 15 18 9"/>
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleDeletePerformanceLevel(level.id)}
+                              className="p-2 rounded-lg hover:bg-gray-200 transition-colors shrink-0"
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <line x1="18" y1="6" x2="6" y2="18"/>
@@ -1808,22 +1685,24 @@ export default function DifferentiatedPanel() {
                               </svg>
                             </button>
                           </div>
-                          <textarea
-                            value={level.description || ''}
-                            onChange={(e) => handleUpdatePerformanceLevel(level.id, { description: e.target.value })}
-                            onClick={(e) => e.stopPropagation()}
-                            onFocus={() => setEditingPerformanceLevelId(level.id)}
-                            placeholder="等级描述（选填）"
-                            rows={2}
-                            className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-                          />
+                          {isExpanded && (
+                            <div className="mt-2">
+                              <textarea
+                                value={level.description || ''}
+                                onChange={(e) => handleUpdatePerformanceLevel(level.id, { description: e.target.value })}
+                                placeholder="等级描述（选填）"
+                                rows={2}
+                                className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                              />
+                            </div>
+                          )}
                         </div>
                       );
                     })}
                   </div>
                   <button
                     onClick={handleAddPerformanceLevel}
-                    className="mt-3 text-sm text-teal-600 font-medium hover:text-teal-700"
+                    className="mt-3 text-sm text-primary-600 font-medium hover:text-primary-700"
                   >
                     + 添加等级
                   </button>
@@ -1843,7 +1722,7 @@ export default function DifferentiatedPanel() {
                     disabled={studentLevels.length === 0 || tieredKnowledgePoints.length === 0}
                     className={`w-full h-10 rounded-xl text-sm font-semibold transition-colors ${
                       studentLevels.length > 0 && tieredKnowledgePoints.length > 0
-                        ? 'bg-gradient-to-r from-teal-500 to-cyan-500 text-white hover:from-teal-600 hover:to-cyan-600'
+                        ? 'bg-gradient-to-r from-primary-400 to-primary-300 text-white hover:from-primary-500 hover:to-primary-400'
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                     }`}
                   >
@@ -1877,7 +1756,7 @@ export default function DifferentiatedPanel() {
                   disabled={!boundPageId}
                   className={`ml-auto flex items-center gap-2 h-10 px-4 rounded-xl text-sm font-semibold transition-colors ${
                     boundPageId
-                      ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:from-emerald-600 hover:to-teal-600'
+                      ? 'bg-gradient-to-r from-primary-500 to-primary-400 text-white hover:from-primary-600 hover:to-primary-500'
                       : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                   }`}
                 >

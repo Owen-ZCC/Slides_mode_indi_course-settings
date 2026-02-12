@@ -287,6 +287,10 @@ export interface TieredAgentConfig {
   specialFocus?: string;
   advancedPrompt?: string;
   isAdvancedMode?: boolean;
+  // 高级配置
+  avatarConfig?: AvatarConfig;
+  voiceConfig?: VoiceConfig;
+  backgroundConfig?: BackgroundConfig;
 }
 
 export interface TieredLevelConfig {

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useEditor } from '@/store/EditorContext';
-import { CoursePage, TieredLevelConfig, LearningTask, TaskEvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle } from '@/types';
+import { CoursePage, TieredLevelConfig, LearningTask, TaskEvaluationCriteria, LearningPerformanceLevel, TieredAgentConfig, GuidanceStyle, ConversationStyle, AgentEncouragementStyle, AvatarConfig, VoiceConfig, BackgroundConfig } from '@/types';
 
 interface TieredTeachingEditorProps {
   page: CoursePage;
@@ -16,6 +16,27 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isAdvancedMode, setIsAdvancedMode] = useState(false);
   const [isPromptExpanded, setIsPromptExpanded] = useState(true);
+
+  // 高级配置状态
+  const [avatarImage, setAvatarImage] = useState('');
+  const [voiceId, setVoiceId] = useState('default');
+  const [voicePitch, setVoicePitch] = useState(0);
+  const [voiceVolume, setVoiceVolume] = useState(70);
+  const [voiceSpeed, setVoiceSpeed] = useState(1);
+  const [voiceAutoRead, setVoiceAutoRead] = useState(false);
+  const [backgroundImage, setBackgroundImage] = useState('');
+  const [showVoiceAdvanced, setShowVoiceAdvanced] = useState(false);
+
+  // 音色选项
+  const voiceOptions = [
+    { id: 'default', name: '请选择' },
+    { id: 'male-child', name: '男声普通话（儿童）' },
+    { id: 'female-child', name: '女声普通话（儿童）' },
+    { id: 'male-adult', name: '男声普通话（成人）' },
+    { id: 'female-adult', name: '女声普通话（成人）' },
+    { id: 'male-cantonese', name: '男声粤语' },
+    { id: 'female-cantonese', name: '女声粤语' },
+  ];
 
   const tieredData = page.tieredTeachingData;
 
@@ -37,6 +58,14 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
     if (currentConfig?.agentConfig?.isAdvancedMode !== undefined) {
       setIsAdvancedMode(currentConfig.agentConfig.isAdvancedMode);
     }
+    // 同步高级配置状态
+    setAvatarImage(currentConfig?.agentConfig?.avatarConfig?.imageUrl || '');
+    setBackgroundImage(currentConfig?.agentConfig?.backgroundConfig?.imageUrl || '');
+    setVoiceId(currentConfig?.agentConfig?.voiceConfig?.voiceId || 'default');
+    setVoicePitch(currentConfig?.agentConfig?.voiceConfig?.pitch || 0);
+    setVoiceVolume(currentConfig?.agentConfig?.voiceConfig?.volume || 70);
+    setVoiceSpeed(currentConfig?.agentConfig?.voiceConfig?.speed || 1);
+    setVoiceAutoRead(currentConfig?.agentConfig?.voiceConfig?.autoRead || false);
   }, [currentLevelIndex, currentConfig?.agentConfig?.isAdvancedMode]);
 
   // 更新当前配置
@@ -233,51 +262,33 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
   };
 
   return (
-    <div className="flex-1 flex overflow-hidden bg-white">
-      {/* 左侧：等级列表 */}
-      <div className="w-64 border-r border-gray-200 overflow-y-auto bg-gray-50">
-        <div className="p-4">
-          <h3 className="text-sm font-semibold text-gray-700 mb-3">认知起点分层</h3>
-          <div className="space-y-2">
-            {tieredData.tieredConfigs.map((config, index) => {
-              const colorMap: Record<string, string> = {
-                emerald: 'bg-emerald-100 border-emerald-400 text-emerald-700',
-                teal: 'bg-teal-100 border-teal-400 text-teal-700',
-                amber: 'bg-amber-100 border-amber-400 text-amber-700',
-                rose: 'bg-rose-100 border-rose-400 text-rose-700',
-                gray: 'bg-gray-100 border-gray-400 text-gray-700',
-              };
-              const colorClass = colorMap[config.levelColor] || colorMap.gray;
-              return (
-                <div
-                  key={config.levelId}
-                  className={`p-3 rounded-xl border-2 cursor-pointer transition-all ${
-                    index === currentLevelIndex
-                      ? `${colorClass} shadow-sm`
-                      : 'border-gray-200 bg-white hover:border-gray-300'
-                  }`}
-                  onClick={() => setCurrentLevelIndex(index)}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{config.levelIcon}</span>
-                    <span className="font-medium text-sm">{config.levelName}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+    <div className="flex-1 flex flex-col overflow-hidden bg-white">
+      {/* 顶部：认知起点分层横向切换 + Tab 导航 */}
+      <div className="bg-white border-b border-gray-200 flex-shrink-0">
+        {/* 分层切换栏 */}
+        <div className="flex items-center gap-2 px-6 pt-3 pb-2 overflow-x-auto">
+          {tieredData.tieredConfigs.map((config, index) => (
+            <button
+              key={config.levelId}
+              onClick={() => setCurrentLevelIndex(index)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-all ${
+                index === currentLevelIndex
+                  ? 'bg-primary-500 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <span className="text-base">{config.levelIcon}</span>
+              {config.levelName}
+            </button>
+          ))}
         </div>
-      </div>
-
-      {/* 右侧：配置内容 */}
-      <div className="flex-1 flex flex-col overflow-hidden">
         {/* Tab 导航 */}
-        <div className="h-14 bg-white border-b border-gray-200 flex items-center px-6 gap-1">
+        <div className="flex items-center px-6 pb-2 gap-1">
           <button
             onClick={() => setActiveTab('tasks')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'tasks'
-                ? 'bg-teal-50 text-teal-700'
+                ? 'bg-primary-50 text-primary-700'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
@@ -287,7 +298,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
             onClick={() => setActiveTab('agent')}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
               activeTab === 'agent'
-                ? 'bg-teal-50 text-teal-700'
+                ? 'bg-primary-50 text-primary-700'
                 : 'text-gray-600 hover:bg-gray-50'
             }`}
           >
@@ -295,23 +306,24 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
           </button>
           <button
             onClick={handleDebug}
-            className="ml-auto px-4 py-2 rounded-lg text-sm font-medium bg-teal-500 text-white hover:bg-teal-600 transition-colors"
+            className="ml-auto px-4 py-2 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-colors"
           >
             调试
           </button>
         </div>
+      </div>
 
-        {/* Tab 内容 */}
-        <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'tasks' && (
-            <div className="max-w-4xl mx-auto space-y-4">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">学习任务</h3>
-                <button
-                  onClick={addLearningTask}
-                  className="px-3 py-1.5 rounded-lg text-sm font-medium bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors"
-                >
-                  + 添加任务
+      {/* Tab 内容 */}
+      <div className="flex-1 overflow-y-auto p-6">
+        {activeTab === 'tasks' && (
+          <div className="max-w-4xl mx-auto space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">学习任务</h3>
+              <button
+                onClick={addLearningTask}
+                className="px-3 py-1.5 rounded-lg text-sm font-medium bg-primary-50 text-primary-600 hover:bg-primary-100 transition-colors"
+              >
+                + 添加任务
                 </button>
               </div>
               {currentConfig.learningTasks.map((task, index) => {
@@ -321,13 +333,13 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                     key={task.id}
                     className={`rounded-xl p-4 space-y-3 cursor-pointer transition-all border-2 ${
                       isSelected
-                        ? 'bg-emerald-50 border-emerald-400 shadow-sm'
-                        : 'bg-gray-50 border-transparent hover:bg-emerald-50/50 hover:border-emerald-200'
+                        ? 'bg-primary-50 border-primary-400 shadow-sm'
+                        : 'bg-gray-50 border-transparent hover:bg-primary-50/50 hover:border-primary-200'
                     }`}
                     onClick={() => setSelectedTaskId(isSelected ? null : task.id)}
                   >
                     <div className="flex items-start justify-between">
-                      <span className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-gray-700'}`}>
+                      <span className={`text-sm font-medium ${isSelected ? 'text-primary-700' : 'text-gray-700'}`}>
                         任务 {index + 1}
                       </span>
                       <button
@@ -346,7 +358,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                       onChange={(e) => updateLearningTask(task.id, { title: e.target.value })}
                       onClick={(e) => e.stopPropagation()}
                       placeholder="任务标题"
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                     />
                     <textarea
                       value={task.description}
@@ -354,13 +366,13 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                       onClick={(e) => e.stopPropagation()}
                       placeholder="任务描述"
                       rows={3}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none bg-white"
+                      className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none bg-white"
                     />
 
                     {/* 评价标准部分 */}
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <div className="flex items-center justify-between mb-3">
-                        <span className={`text-sm font-medium ${isSelected ? 'text-emerald-700' : 'text-gray-700'}`}>
+                        <span className={`text-sm font-medium ${isSelected ? 'text-primary-700' : 'text-gray-700'}`}>
                           评价标准
                         </span>
                         <button
@@ -368,7 +380,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                             e.stopPropagation();
                             addTaskEvaluationCriteria(task.id);
                           }}
-                          className="px-2 py-1 rounded text-xs font-medium bg-teal-50 text-teal-600 hover:bg-teal-100 transition-colors"
+                          className="px-2 py-1 rounded text-xs font-medium bg-primary-50 text-primary-600 hover:bg-primary-100 transition-colors"
                         >
                           + 添加标准
                         </button>
@@ -399,7 +411,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                                 onChange={(e) => updateTaskEvaluationCriteria(task.id, criteria.id, { name: e.target.value })}
                                 onClick={(e) => e.stopPropagation()}
                                 placeholder="评价维度"
-                                className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                               />
                               <textarea
                                 value={criteria.description}
@@ -407,7 +419,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                                 onClick={(e) => e.stopPropagation()}
                                 placeholder="评价细则"
                                 rows={2}
-                                className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                                className="w-full px-2 py-1.5 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                               />
                               <div className="flex items-center gap-2">
                                 <label className="text-xs text-gray-600">权重:</label>
@@ -418,7 +430,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                                   onClick={(e) => e.stopPropagation()}
                                   min="0"
                                   max="100"
-                                  className="w-16 px-2 py-1 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                                  className="w-16 px-2 py-1 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                                 />
                                 <span className="text-xs text-gray-600">%</span>
                               </div>
@@ -445,7 +457,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                     }}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                       !isAdvancedMode
-                        ? 'bg-emerald-500 text-white'
+                        ? 'bg-primary-500 text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -458,7 +470,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                     }}
                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                       isAdvancedMode
-                        ? 'bg-emerald-500 text-white'
+                        ? 'bg-primary-500 text-white'
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                   >
@@ -480,7 +492,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                           type="text"
                           value={currentConfig.agentConfig.name}
                           onChange={(e) => updateAgentConfig({ name: e.target.value })}
-                          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         />
                       </div>
                       <div>
@@ -489,7 +501,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                           type="text"
                           value={currentConfig.agentConfig.role}
                           onChange={(e) => updateAgentConfig({ role: e.target.value })}
-                          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                         />
                       </div>
                     </div>
@@ -509,7 +521,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                               onClick={() => updateAgentConfig({ guidanceStyle: style })}
                               className={`p-3 rounded-lg border-2 text-left transition-all ${
                                 currentConfig.agentConfig.guidanceStyle === style
-                                  ? 'border-teal-500 bg-teal-50'
+                                  ? 'border-primary-500 bg-primary-50'
                                   : 'border-gray-200 hover:border-gray-300'
                               }`}
                             >
@@ -529,7 +541,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                             onClick={() => updateAgentConfig({ conversationStyle: style })}
                             className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
                               currentConfig.agentConfig.conversationStyle === style
-                                ? 'border-teal-500 bg-teal-50 text-teal-700'
+                                ? 'border-primary-500 bg-primary-50 text-primary-700'
                                 : 'border-gray-200 text-gray-700 hover:border-gray-300'
                             }`}
                           >
@@ -547,7 +559,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                             onClick={() => updateAgentConfig({ encouragementStyle: style })}
                             className={`px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
                               currentConfig.agentConfig.encouragementStyle === style
-                                ? 'border-teal-500 bg-teal-50 text-teal-700'
+                                ? 'border-primary-500 bg-primary-50 text-primary-700'
                                 : 'border-gray-200 text-gray-700 hover:border-gray-300'
                             }`}
                           >
@@ -565,9 +577,9 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                           max={15}
                           value={currentConfig.agentConfig.maxRounds}
                           onChange={(e) => updateAgentConfig({ maxRounds: parseInt(e.target.value) })}
-                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                          className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-primary-500"
                         />
-                        <span className="w-12 text-center text-sm font-medium text-teal-600 bg-teal-50 px-2 py-1 rounded-lg">
+                        <span className="w-12 text-center text-sm font-medium text-primary-600 bg-primary-50 px-2 py-1 rounded-lg">
                           {currentConfig.agentConfig.maxRounds} 轮
                         </span>
                       </div>
@@ -579,7 +591,7 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                         onChange={(e) => updateAgentConfig({ specialFocus: e.target.value })}
                         placeholder="例如：重点关注学生对「力的作用效果」的理解，注意区分力的两种效果"
                         rows={2}
-                        className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+                        className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
                       />
                     </div>
                   </div>
@@ -606,25 +618,287 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
                         </svg>
                       </button>
                     </div>
-                    {isPromptExpanded && (
-                      <div className="p-4">
-                        <textarea
-                          value={currentConfig.agentConfig.advancedPrompt || getDefaultAdvancedPrompt()}
-                          onChange={(e) => updateAgentConfig({ advancedPrompt: e.target.value })}
-                          placeholder="输入自定义提示词..."
-                          rows={20}
-                          className="w-full px-4 py-3 border border-gray-300 rounded-xl text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-                        />
-                        <div className="mt-3 flex items-center justify-between">
-                          <p className="text-xs text-gray-500">
-                            提示：在高级模式下，您可以完全自定义智能学伴的行为和对话策略
-                          </p>
-                          <button
-                            onClick={() => updateAgentConfig({ advancedPrompt: getDefaultAdvancedPrompt() })}
-                            className="text-xs text-teal-600 hover:text-teal-700 font-medium"
-                          >
-                            重置为默认
-                          </button>
+                    <textarea
+                      value={currentConfig.agentConfig.advancedPrompt || getDefaultAdvancedPrompt()}
+                      onChange={(e) => updateAgentConfig({ advancedPrompt: e.target.value })}
+                      placeholder="输入自定义提示词..."
+                      rows={isPromptExpanded ? 20 : 6}
+                      className="w-full px-4 py-3 text-sm font-mono resize-none focus:outline-none border-none"
+                    />
+                    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50">
+                      <button
+                        onClick={() => updateAgentConfig({ advancedPrompt: getDefaultAdvancedPrompt() })}
+                        className="text-sm text-primary-600 hover:text-primary-700"
+                      >
+                        重置为默认
+                      </button>
+                      <button
+                        onClick={() => setIsPromptExpanded(false)}
+                        className="px-4 py-1.5 bg-primary-500 text-white text-sm rounded-lg hover:bg-primary-600 transition-colors"
+                      >
+                        完成编辑
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 角色形象和背景图片 - 同一行 */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {/* 角色形象 */}
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-pink-500"></span>
+                          <span className="text-sm font-semibold text-gray-900">角色形象</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.onchange = (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  const url = ev.target?.result as string;
+                                  setAvatarImage(url);
+                                  updateAgentConfig({ avatarConfig: { imageUrl: url, name: '' } });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            };
+                            input.click();
+                          }}
+                          className="text-xs text-pink-500 hover:text-pink-600 font-medium"
+                        >
+                          更换图片
+                        </button>
+                      </div>
+                      <div
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const url = ev.target?.result as string;
+                                setAvatarImage(url);
+                                updateAgentConfig({ avatarConfig: { imageUrl: url, name: '' } });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="w-full h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-pink-400 hover:bg-pink-50 transition-colors"
+                      >
+                        {avatarImage ? (
+                          <img src={avatarImage} alt="角色形象" className="h-full object-contain" />
+                        ) : (
+                          <>
+                            <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-xs text-gray-500">点击上传角色图片</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 背景图片 */}
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-pink-500"></span>
+                          <span className="text-sm font-semibold text-gray-900">背景图片</span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            const input = document.createElement('input');
+                            input.type = 'file';
+                            input.accept = 'image/*';
+                            input.onchange = (e) => {
+                              const file = (e.target as HTMLInputElement).files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onload = (ev) => {
+                                  const url = ev.target?.result as string;
+                                  setBackgroundImage(url);
+                                  updateAgentConfig({ backgroundConfig: { imageUrl: url } });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            };
+                            input.click();
+                          }}
+                          className="text-xs text-pink-500 hover:text-pink-600 font-medium"
+                        >
+                          更换图片
+                        </button>
+                      </div>
+                      <div
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = (e) => {
+                            const file = (e.target as HTMLInputElement).files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onload = (ev) => {
+                                const url = ev.target?.result as string;
+                                setBackgroundImage(url);
+                                updateAgentConfig({ backgroundConfig: { imageUrl: url } });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          };
+                          input.click();
+                        }}
+                        className="w-full h-24 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center cursor-pointer hover:border-pink-400 hover:bg-pink-50 transition-colors"
+                      >
+                        {backgroundImage ? (
+                          <img src={backgroundImage} alt="背景图片" className="w-full h-full object-cover rounded-lg" />
+                        ) : (
+                          <>
+                            <svg className="w-6 h-6 text-gray-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-xs text-gray-500">点击上传背景图片</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 语音播报配置 */}
+                  <div className="bg-gray-50 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-pink-500"></span>
+                        <span className="text-sm font-semibold text-gray-900">语音播报</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button className="px-3 py-1 text-sm text-pink-500 border border-pink-300 rounded-lg hover:bg-pink-50 transition-colors">
+                          播放
+                        </button>
+                        <button
+                          onClick={() => setShowVoiceAdvanced(!showVoiceAdvanced)}
+                          className="text-xs text-gray-500 hover:text-gray-700"
+                        >
+                          高级设置 {showVoiceAdvanced ? '∧' : '∨'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 音色选择 */}
+                    <div className="space-y-2">
+                      <select
+                        value={voiceId}
+                        onChange={(e) => {
+                          setVoiceId(e.target.value);
+                          updateAgentConfig({
+                            voiceConfig: { voiceId: e.target.value, pitch: voicePitch, volume: voiceVolume, speed: voiceSpeed, autoRead: voiceAutoRead }
+                          });
+                        }}
+                        className="w-full h-10 px-3 border border-gray-300 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                      >
+                        {voiceOptions.map(option => (
+                          <option key={option.id} value={option.id}>{option.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* 高级设置 */}
+                    {showVoiceAdvanced && (
+                      <div className="space-y-4 pt-2 border-t border-gray-200">
+                        {/* 音高 */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">音高</span>
+                            <span className="text-sm font-medium text-gray-900">{voicePitch}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="-100"
+                            max="100"
+                            value={voicePitch}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setVoicePitch(val);
+                              updateAgentConfig({
+                                voiceConfig: { voiceId, pitch: val, volume: voiceVolume, speed: voiceSpeed, autoRead: voiceAutoRead }
+                              });
+                            }}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                          />
+                        </div>
+
+                        {/* 音量 */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">音量</span>
+                            <span className="text-sm font-medium text-gray-900">{voiceVolume}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={voiceVolume}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value);
+                              setVoiceVolume(val);
+                              updateAgentConfig({
+                                voiceConfig: { voiceId, pitch: voicePitch, volume: val, speed: voiceSpeed, autoRead: voiceAutoRead }
+                              });
+                            }}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                          />
+                        </div>
+
+                        {/* 语速 */}
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-gray-600">语速</span>
+                            <span className="text-sm font-medium text-gray-900">{voiceSpeed}x</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0.5"
+                            max="2"
+                            step="0.1"
+                            value={voiceSpeed}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              setVoiceSpeed(val);
+                              updateAgentConfig({
+                                voiceConfig: { voiceId, pitch: voicePitch, volume: voiceVolume, speed: val, autoRead: voiceAutoRead }
+                              });
+                            }}
+                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-pink-500"
+                          />
+                        </div>
+
+                        {/* 自动朗读 */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600">自动朗读</span>
+                          <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={voiceAutoRead}
+                              onChange={(e) => {
+                                setVoiceAutoRead(e.target.checked);
+                                updateAgentConfig({
+                                  voiceConfig: { voiceId, pitch: voicePitch, volume: voiceVolume, speed: voiceSpeed, autoRead: e.target.checked }
+                                });
+                              }}
+                              className="sr-only peer"
+                            />
+                            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-pink-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-pink-500"></div>
+                          </label>
                         </div>
                       </div>
                     )}
@@ -650,7 +924,6 @@ export default function TieredTeachingEditor({ page }: TieredTeachingEditorProps
             </div>
           )}
         </div>
-      </div>
 
       {/* 调试模式弹窗 */}
       {isDebugMode && (
